@@ -119,6 +119,15 @@ Q&A over indexed session recordings with cited timestamps.
   for both apps, follow-up sequence, personalization formula, sending checklist.
 - [`sample-drafts.md`](outreach/sample-drafts.md) — two fully personalized
   ready-to-send examples.
+- **`mailmerge-gearwall.csv` / `mailmerge-onboarding.csv`** — every one of the 287
+  + 311 companies as a mail-merge row with its own subject line and a complete,
+  personalized founder-voice email body, ready to load into a Gmail mail-merge tool.
+- [`email-final-gearwall.md`](outreach/email-final-gearwall.md) /
+  [`email-final-onboarding.md`](outreach/email-final-onboarding.md) — the polished
+  founder-voice email each CSV is built from; [`build_mailmerge.py`](outreach/build_mailmerge.py)
+  regenerates the CSVs after you edit the signature.
+- [`HOW-TO-SEND.md`](outreach/HOW-TO-SEND.md) — send them one by one from your own
+  Gmail with a mail-merge add-on (Claude can't send email; this is the working path).
 
 ## Testing
 
