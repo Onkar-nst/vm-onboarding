@@ -10,6 +10,16 @@ const LS_SOUND = "katta_sound_v1";
 const $ = (sel, el = document) => el.querySelector(sel);
 const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
 
+// Episodes live in the database (Store); seeded from knowledge.js on first run.
+let EPISODES = [];
+let SETTINGS = { id: "settings", orgName: "The Katta", adminPin: "1234" };
+
+async function refreshEpisodes() {
+  EPISODES = (await Store.list("episodes")).sort((a, b) => (a.no || 0) - (b.no || 0));
+  const s = (await Store.list("settings")).find(x => x.id === "settings");
+  if (s) SETTINGS = s;
+}
+
 /* ---------------- helpers ---------------- */
 
 function esc(s) {
@@ -305,5 +315,153 @@ soundBtn.addEventListener("click", () => {
 });
 $("#libBtn").addEventListener("click", () => showEpisodeModal(null, null));
 
-reflectSound();
-renderHistory();
+/* ---------------- admin: author & import episodes ---------------- */
+
+let adminUnlocked = false;
+
+function adminGate(then) {
+  if (adminUnlocked) return then();
+  const back = document.createElement("div");
+  back.className = "modal-back";
+  back.innerHTML = `<div class="modal">
+    <h3>Curator PIN</h3>
+    <div class="sub">Editing the episode library is PIN-protected.</div>
+    <input id="pinInput" type="password" inputmode="numeric" maxlength="8" class="adm-input" placeholder="PIN">
+    <div class="actions"><button class="btn" id="pinCancel">Cancel</button><button class="btn" id="pinGo" style="border-color:var(--gold);color:var(--gold)">Unlock</button></div>
+  </div>`;
+  document.body.appendChild(back);
+  const tryPin = () => {
+    if (back.querySelector("#pinInput").value === String(SETTINGS.adminPin)) {
+      adminUnlocked = true; back.remove(); then();
+    } else { back.querySelector("#pinInput").value = ""; back.querySelector("#pinInput").focus(); }
+  };
+  back.querySelector("#pinGo").addEventListener("click", tryPin);
+  back.querySelector("#pinInput").addEventListener("keydown", e => { if (e.key === "Enter") tryPin(); });
+  back.querySelector("#pinCancel").addEventListener("click", () => back.remove());
+  back.addEventListener("click", e => { if (e.target === back) back.remove(); });
+  back.querySelector("#pinInput").focus();
+}
+
+function showAdminModal(epId) {
+  const ep = epId ? EPISODES.find(e => e.id === epId) : null;
+  const segText = ep
+    ? ep.segments.map(s => `@ ${s.t} | ${s.keywords.join(", ")}\n${s.text}`).join("\n\n")
+    : "@ 12:30 | keyword1, keyword2, keyword3\nThe answer text for this timestamped segment…";
+  const back = document.createElement("div");
+  back.className = "modal-back";
+  back.innerHTML = `<div class="modal">
+    <h3>${ep ? "Edit episode" : "Add episode"}</h3>
+    <div class="sub">Segments: one block each — first line "@ MM:SS | comma, separated, keywords", following lines are the answer text.</div>
+    <div style="display:grid;grid-template-columns:80px 1fr;gap:10px;margin-top:12px">
+      <input id="epNo" class="adm-input" type="number" min="1" value="${ep ? ep.no : EPISODES.length + 1}" title="Session number">
+      <input id="epTitle" class="adm-input" placeholder="Episode title" value="${ep ? esc(ep.title) : ""}" maxlength="90">
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-top:10px">
+      <input id="epDate" class="adm-input" type="date" value="${ep ? ep.date : new Date().toISOString().slice(0, 10)}">
+      <input id="epDur" class="adm-input" placeholder="Duration e.g. 58:12" value="${ep ? esc(ep.duration) : ""}" maxlength="10">
+      <input id="epTopics" class="adm-input" placeholder="topics, comma, separated" value="${ep ? esc(ep.topics.join(", ")) : ""}" maxlength="120">
+    </div>
+    <textarea id="epSegs" class="adm-input" style="min-height:220px;margin-top:10px;font-family:var(--mono);font-size:12.5px;line-height:1.6">${esc(segText)}</textarea>
+    <div class="actions" style="margin-top:14px">
+      ${ep ? `<button class="btn" id="epDelete" style="margin-right:auto;border-color:#8a3030;color:#e88">Remove</button>` : ""}
+      <button class="btn" id="epCancel">Cancel</button>
+      <button class="btn" id="epSave" style="border-color:var(--gold);color:var(--gold)">Save episode</button>
+    </div>`;
+  document.body.appendChild(back);
+  back.addEventListener("click", e => { if (e.target === back) back.remove(); });
+  back.querySelector("#epCancel").addEventListener("click", () => back.remove());
+  back.querySelector("#epSave").addEventListener("click", async () => {
+    const title = back.querySelector("#epTitle").value.trim();
+    if (!title) { back.querySelector("#epTitle").focus(); return; }
+    const segments = [];
+    for (const block of back.querySelector("#epSegs").value.split(/\n\s*\n/)) {
+      const lines = block.trim().split("\n");
+      const head = lines[0] || "";
+      const m = head.match(/^@\s*([0-9:]+)\s*\|(.*)$/);
+      if (!m || lines.length < 2) continue;
+      segments.push({
+        t: m[1].trim(),
+        keywords: m[2].split(",").map(k => k.trim().toLowerCase()).filter(Boolean),
+        text: lines.slice(1).join(" ").trim()
+      });
+    }
+    if (!segments.length) { alert("No valid segments — check the format."); return; }
+    const doc = ep || { id: "katta-" + String(Date.now()).slice(-6), hue: Math.floor(Math.random() * 360) };
+    Object.assign(doc, {
+      no: Number(back.querySelector("#epNo").value) || EPISODES.length + 1,
+      title,
+      date: back.querySelector("#epDate").value,
+      duration: back.querySelector("#epDur").value.trim() || "—",
+      topics: back.querySelector("#epTopics").value.split(",").map(t => t.trim()).filter(Boolean),
+      segments
+    });
+    await Store.put("episodes", doc);
+    await refreshEpisodes();
+    back.remove();
+    showCuratorPanel();
+  });
+  const del = back.querySelector("#epDelete");
+  if (del) del.addEventListener("click", async () => {
+    await Store.remove("episodes", ep.id);
+    await refreshEpisodes();
+    back.remove();
+    showCuratorPanel();
+  });
+}
+
+function showCuratorPanel() {
+  const back = document.createElement("div");
+  back.className = "modal-back";
+  back.innerHTML = `<div class="modal">
+    <h3>Curator panel</h3>
+    <div class="sub">${EPISODES.length} episodes · ${EPISODES.reduce((s, e) => s + e.segments.length, 0)} indexed segments · adapter: <b>${(window.APP_CONFIG || {}).adapter || "local"}</b></div>
+    ${EPISODES.map(ep => `
+      <div class="ep-row">
+        <div class="thumb">${epThumb(ep, 140)}</div>
+        <div style="flex:1"><h4>${esc(ep.title)}</h4>
+          <div class="meta">S${String(ep.no).padStart(2, "0")} · ${ep.segments.length} segments</div></div>
+        <button class="btn" data-edit="${ep.id}">✎ Edit</button>
+      </div>`).join("")}
+    <div class="actions" style="margin-top:14px;flex-wrap:wrap">
+      <button class="btn" id="cpExport" style="margin-right:auto">⬇ Export JSON</button>
+      <button class="btn" id="cpImport">⬆ Import JSON</button>
+      <button class="btn" id="cpClose">Close</button>
+      <button class="btn" id="cpAdd" style="border-color:var(--gold);color:var(--gold)">+ Add episode</button>
+    </div>
+    <input type="file" id="cpFile" accept="application/json" style="display:none">`;
+  document.body.appendChild(back);
+  back.addEventListener("click", e => { if (e.target === back) back.remove(); });
+  back.querySelector("#cpClose").addEventListener("click", () => back.remove());
+  back.querySelector("#cpAdd").addEventListener("click", () => { back.remove(); showAdminModal(null); });
+  back.querySelectorAll("[data-edit]").forEach(b => b.addEventListener("click", () => { back.remove(); showAdminModal(b.dataset.edit); }));
+  back.querySelector("#cpExport").addEventListener("click", async () => {
+    const dump = await Store.exportAll(["settings", "episodes"]);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(dump, null, 2)], { type: "application/json" }));
+    a.download = "katta-knowledge-backup.json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+  back.querySelector("#cpImport").addEventListener("click", () => back.querySelector("#cpFile").click());
+  back.querySelector("#cpFile").addEventListener("change", async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      await Store.importAll(JSON.parse(await file.text()));
+      await refreshEpisodes();
+      back.remove();
+      showCuratorPanel();
+    } catch (err) { alert("Import failed: not a valid backup file"); }
+  });
+}
+
+$("#adminBtn").addEventListener("click", () => adminGate(showCuratorPanel));
+
+/* ---------------- boot ---------------- */
+
+(async function boot() {
+  if ((window.APP_CONFIG || {}).loadDemoSeed !== false) await loadSeedIfEmpty();
+  await refreshEpisodes();
+  reflectSound();
+  renderHistory();
+})();

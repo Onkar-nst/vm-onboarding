@@ -269,6 +269,31 @@ tr:last-child td { border-bottom: none; }
 }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
+/* ---------- v2 production additions ---------- */
+.mono { font-family: var(--mono); }
+.late {
+  display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
+  color: #fff; background: var(--red); border-radius: 5px; padding: 2px 7px; margin-left: 6px;
+}
+.member-sel {
+  background: var(--panel); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 10px; padding: 8px 12px; font: inherit; font-size: 13.5px; max-width: 190px;
+}
+.member-sel:focus { outline: 2px solid var(--amber); }
+.shoot-card.overdue { border-color: var(--red); }
+.cal-shoot.overdue { background: var(--red-soft); color: var(--red); }
+.cal-shoot.cancelled { background: var(--panel2); color: var(--muted); text-decoration: line-through; }
+.gear-pick label.soft { border-style: dashed; border-color: var(--blue); }
+.set-label {
+  display: block; font-size: 12px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 0.06em; margin: 16px 0 6px;
+}
+.set-input {
+  width: 100%; padding: 11px 13px; background: var(--panel2); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 10px; font: inherit;
+}
+.set-input:focus { outline: 2px solid var(--amber); border-color: transparent; }
+
 @media (max-width: 720px) {
   .cal-cell { min-height: 64px; }
   .gear-pick { grid-template-columns: 1fr; }

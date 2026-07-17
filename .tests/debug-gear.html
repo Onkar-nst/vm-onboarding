@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>gear debug</title></head><body>
+<pre id="out">running</pre>
+<iframe id="frame" style="width:1280px;height:900px"></iframe>
+<script>
+const lines = [];
+function sleep(ms){return new Promise(r=>setTimeout(r,ms));}
+(async () => {
+  Object.keys(localStorage).filter(k=>k.startsWith("gearwall_v2")).forEach(k=>localStorage.removeItem(k));
+  const f = document.getElementById("frame");
+  const w = await new Promise(res => { f.onload = () => res(f.contentWindow); f.src = "../gear-wall/index.html"; });
+  w.addEventListener("error", e => lines.push("IFRAME ERROR: " + e.message + " @ " + e.filename + ":" + e.lineno));
+  for (const t of [100, 300, 600, 1200, 2500]) {
+    await sleep(t);
+    const d = w.document;
+    lines.push(`t+${t}: cards=${d.querySelectorAll(".gear-card").length} org="${(d.querySelector("#orgName")||{}).textContent}" viewLen=${(d.querySelector("#view")||{innerHTML:""}).innerHTML.length} gearLS=${(JSON.parse(localStorage.getItem("gearwall_v2:gear")||"[]")).length}`);
+  }
+  document.getElementById("out").textContent = lines.join("\n");
+  document.title = "DEBUG-DONE";
+})();
+</script>
+</body></html>

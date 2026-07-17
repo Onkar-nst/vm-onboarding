@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>Katta suite — test harness</title></head>
+<head><meta charset="UTF-8"><title>Katta suite v2 — test harness</title></head>
 <body>
 <h1>Test results</h1>
 <pre id="results">RUNNING</pre>
-<iframe id="frame" style="width:1200px;height:800px"></iframe>
+<iframe id="frame" style="width:1280px;height:900px"></iframe>
 <script>
 const results = [];
 function report(name, ok, extra) {
@@ -18,130 +18,227 @@ function loadFrame(url) {
     f.src = url;
   });
 }
-
-async function testVM() {
-  // fresh state
-  localStorage.removeItem("vmob_profiles");
-  localStorage.removeItem("vmob_current");
-  localStorage.removeItem("vmob_submissions");
-  const w = await loadFrame("../vm-onboarding/index.html");
-  await sleep(300);
-  const d = w.document;
-  try {
-    report("VM: login screen shows", !!d.querySelector("#nameInput"));
-    d.querySelector("#nameInput").value = "Harness Tester";
-    d.querySelector("#startBtn").click();
-    await sleep(200);
-    const cards = d.querySelectorAll(".mod-card[data-mod]");
-    report("VM: 8 module cards render", cards.length === 8, cards.length + " cards");
-    report("VM: module 1 available", cards[0].dataset.state === "available");
-    report("VM: module 2 locked", cards[1].dataset.state === "locked");
-    cards[0].click();
-    await sleep(200);
-    report("VM: module view opens with quiz", !!d.querySelector(".quiz"));
-    // wrong answer first (index 0 is wrong for module 1; correct is 2)
-    d.querySelector('.opt[data-i="0"]').click();
-    await sleep(100);
-    report("VM: wrong answer marked", d.querySelector('.opt[data-i="0"]').classList.contains("wrong"));
-    d.querySelector('.opt[data-i="2"]').click();
-    await sleep(100);
-    report("VM: correct answer accepted", d.querySelector('.opt[data-i="2"]').classList.contains("right"));
-    const prof = JSON.parse(localStorage.getItem("vmob_profiles"))["Harness Tester"];
-    report("VM: pass persisted to profile", prof && prof.passed.includes("welcome"));
-    report("VM: wrong attempt logged as gap", prof && prof.wrongAnswers.length === 1);
-    d.querySelector("#nextBtn").click();
-    await sleep(200);
-    report("VM: next module opened after pass", d.body.textContent.includes("Pacing"));
-  } catch (e) { report("VM: exception", false, e.message); }
-  // cleanup
-  localStorage.removeItem("vmob_profiles");
-  localStorage.removeItem("vmob_current");
-  localStorage.removeItem("vmob_submissions");
+function wipe(prefix) {
+  Object.keys(localStorage).filter(k => k.startsWith(prefix)).forEach(k => localStorage.removeItem(k));
 }
 
-async function testGear() {
-  localStorage.removeItem("gearwall_state_v1");
-  const w = await loadFrame("../gear-wall/index.html");
-  await sleep(400);
+/* ================= Academy (vm-onboarding) ================= */
+async function testAcademy() {
+  wipe("academy_v2");
+  const w = await loadFrame("../vm-onboarding/index.html");
+  await sleep(700); // async boot + seed
   const d = w.document;
   try {
-    report("Gear: wall renders 16 items", d.querySelectorAll(".gear-card").length === 16, d.querySelectorAll(".gear-card").length + " cards");
-    report("Gear: QR codes generated", d.querySelectorAll(".gear-card .qr svg").length === 16);
-    report("Gear: damaged item badged", !!d.querySelector(".badge.damaged"));
-    // calendar renders
-    w.setTab("calendar");
+    report("ACAD: login shows seeded profiles", d.querySelectorAll(".person-btn").length === 2, d.querySelectorAll(".person-btn").length + " profiles");
+    // join as a brand-new trainee (tests person creation through the Store)
+    d.querySelector("#nameInput").value = "Harness Trainee";
+    d.querySelector("#joinBtn").click();
+    await sleep(500);
+    report("ACAD: new trainee lands on course home", d.body.textContent.includes("Editor Onboarding"));
+    const cards = d.querySelectorAll(".mod-card[data-mod]");
+    report("ACAD: 8 seeded modules render", cards.length === 8, cards.length + " cards");
+    report("ACAD: module 2 locked", cards[1].dataset.state === "locked");
+    cards[0].click();
+    await sleep(300);
+    d.querySelector('.opt[data-i="0"]').click(); // wrong
+    await sleep(150);
+    d.querySelector('.opt[data-i="2"]').click(); // correct
+    await sleep(300);
+    const prog = JSON.parse(localStorage.getItem("academy_v2:progress") || "[]");
+    const mine = prog.find(p => p.personId && p.passed.includes("MOD-welcome"));
+    report("ACAD: quiz pass persisted via Store", !!mine);
+    report("ACAD: wrong attempt logged as gap", mine && mine.wrongAnswers.length === 1);
+    // lead tools: switch to seeded lead
+    d.querySelector("#switchBtn").click();
+    await sleep(300);
+    [...d.querySelectorAll(".person-btn")].find(b => b.textContent.includes("Priya")).click();
+    await sleep(300);
+    d.querySelector("#adminBtn").click();
     await sleep(200);
-    report("Gear: calendar renders cells", d.querySelectorAll(".cal-cell").length >= 28);
-    report("Gear: seeded pending shoot visible", d.body.textContent.includes("VM shoot one"));
-    // scanner flow: GW-CAM-001 is in an approved shoot today
+    d.querySelector("#pinInput").value = "1234";
+    d.querySelector("#pinGo").click();
+    await sleep(400);
+    report("ACAD: lead dashboard opens after PIN", d.body.textContent.includes("Trainee progress"));
+    report("ACAD: demo submission visible in dashboard", d.body.textContent.includes("Arjun"));
+    // review queue: request changes on the seeded submission
+    [...d.querySelectorAll(".lead-tab")].find(b => b.textContent.includes("Review")).click();
+    await sleep(300);
+    d.querySelector("[data-review]").click();
+    await sleep(300);
+    d.querySelector("[data-gap='1']").click();
+    d.querySelector("#rvFeedback").value = "Hook needs the collage composition — see module 3.";
+    d.querySelector("#rvChanges").click();
+    await sleep(400);
+    const subs = JSON.parse(localStorage.getItem("academy_v2:submissions") || "[]");
+    report("ACAD: review saved changes_requested + gap + feedback",
+      subs[0] && subs[0].status === "changes_requested" && subs[0].gapItems.includes(1) && subs[0].feedback.includes("collage"));
+    // course builder: create a new course through the UI
+    [...d.querySelectorAll(".lead-tab")].find(b => b.textContent.includes("builder")).click();
+    await sleep(300);
+    d.querySelector("#addCourse").click();
+    await sleep(200);
+    d.querySelector("#crTitle").value = "Client Servicing 101";
+    d.querySelector("#crSave").click();
+    await sleep(400);
+    const courses = JSON.parse(localStorage.getItem("academy_v2:courses") || "[]");
+    report("ACAD: builder created a second course", courses.length === 2 && courses.some(c => c.title === "Client Servicing 101"));
+    // add a module to it via the module editor
+    const addBtn = d.querySelector("#addModule");
+    report("ACAD: course editor opened for new course", !!addBtn);
+    if (addBtn) {
+      addBtn.click();
+      await sleep(200);
+      d.querySelector("#mdTitle").value = "Meet the clients";
+      d.querySelector("#mdSections").value = "## First rule\nAlways reply within 4 working hours.";
+      d.querySelector("#qzQ").value = "Max reply time?";
+      d.querySelector("#qzO0").value = "4 working hours";
+      d.querySelector("#qzO1").value = "Two days";
+      d.querySelector("#mdSave").click();
+      await sleep(400);
+      const mods = JSON.parse(localStorage.getItem("academy_v2:modules") || "[]");
+      report("ACAD: module authored via builder", mods.some(m => m.title === "Meet the clients" && m.quiz.options.length === 2));
+    }
+  } catch (e) { report("ACAD: exception", false, e.message); }
+  wipe("academy_v2");
+  sessionStorage.clear();
+}
+
+/* ================= Gear Wall ================= */
+async function testGear() {
+  wipe("gearwall_v2");
+  const w = await loadFrame("../gear-wall/index.html");
+  await sleep(800); // async boot + seed
+  const d = w.document;
+  try {
+    report("GEAR: wall renders 16 seeded items", d.querySelectorAll(".gear-card").length === 16, d.querySelectorAll(".gear-card").length + " cards");
+    report("GEAR: QR codes generated", d.querySelectorAll(".gear-card .qr svg").length === 16);
+    report("GEAR: org name from settings", d.querySelector("#orgName").textContent.includes("Aperture"));
+    // pick crew member Adi
+    const sel = d.querySelector("#memberSel");
+    sel.value = "MB-003";
+    sel.dispatchEvent(new w.Event("change"));
+    await sleep(300);
+    // scanner: BK-001 (approved, today) includes GW-CAM-001
+    w.setTab("scanner");
+    await sleep(300);
+    await w.handleCode("gearwall:GW-CAM-001");
+    await sleep(300);
+    report("GEAR: pickup modal opened with condition select", !!d.querySelector("#outCond"));
+    d.querySelector("#puGo").click();
+    await sleep(500);
+    let bookings = JSON.parse(localStorage.getItem("gearwall_v2:bookings") || "[]");
+    let bk1 = bookings.find(b => b.id === "BK-001");
+    report("GEAR: scan picked up booked gear", bk1 && bk1.pickups["GW-CAM-001"] && !!bk1.pickups["GW-CAM-001"].pickedAt);
+    // return flow with condition
+    w.setTab("wall");
+    await sleep(300);
+    const retBtn = d.querySelector("[data-return='GW-CAM-001']");
+    report("GEAR: wall shows return button while out", !!retBtn);
+    retBtn.click();
+    await sleep(200);
+    d.querySelector("#retGo").click();
+    await sleep(500);
+    bookings = JSON.parse(localStorage.getItem("gearwall_v2:bookings") || "[]");
+    bk1 = bookings.find(b => b.id === "BK-001");
+    report("GEAR: return recorded with condition", bk1.pickups["GW-CAM-001"].returnedAt > 0 && bk1.pickups["GW-CAM-001"].inCond === "ok");
+    // pending booking can't be picked up (BK-002 → GW-CAM-002, pending)
     w.setTab("scanner");
     await sleep(200);
-    w.handleCode("gearwall:GW-CAM-001");
-    await sleep(100);
-    let st = JSON.parse(localStorage.getItem("gearwall_state_v1"));
-    report("Gear: scan picks up booked gear", st.gear.find(g => g.id === "GW-CAM-001").status === "in_use");
-    report("Gear: pickup result shown", !!d.querySelector(".scan-result.ok"));
-    w.handleCode("GW-CAM-001"); // second scan = return (also tests raw id without prefix)
-    await sleep(100);
-    st = JSON.parse(localStorage.getItem("gearwall_state_v1"));
-    const sh = st.shoots.find(s => s.pickups["GW-CAM-001"]);
-    report("Gear: second scan returns gear", st.gear.find(g => g.id === "GW-CAM-001").status === "available");
-    report("Gear: usage duration recorded", sh && sh.pickups["GW-CAM-001"].returnedAt > 0);
-    // unapproved booking blocked: GW-CAM-002 is only in the pending shoot
-    w.handleCode("GW-CAM-002");
-    await sleep(100);
-    st = JSON.parse(localStorage.getItem("gearwall_state_v1"));
-    report("Gear: pending shoot cannot pick up", st.gear.find(g => g.id === "GW-CAM-002").status === "available");
-    report("Gear: warning shown for pending", !!d.querySelector(".scan-result.warn"));
-    // unknown code
-    w.handleCode("gearwall:NOPE-000");
-    await sleep(100);
-    report("Gear: unknown code rejected", !!d.querySelector(".scan-result.err"));
-    // admin approve flow
-    st = JSON.parse(localStorage.getItem("gearwall_state_v1"));
-    report("Gear: activity log populated", st.log.length >= 3);
-  } catch (e) { report("Gear: exception", false, e.message); }
-  localStorage.removeItem("gearwall_state_v1");
+    await w.handleCode("GW-CAM-002");
+    await sleep(300);
+    report("GEAR: pending booking blocked at scanner", d.querySelector("#scanResult").textContent.includes("pending approval"));
+    // manager approve flow with PIN
+    sel.value = "MB-001";
+    sel.dispatchEvent(new w.Event("change"));
+    await sleep(300);
+    w.setTab("calendar");
+    await sleep(300);
+    d.querySelector("[data-approve='BK-002']").click();
+    await sleep(200);
+    d.querySelector("#pinInput").value = "1234";
+    d.querySelector("#pinGo").click();
+    await sleep(500);
+    bookings = JSON.parse(localStorage.getItem("gearwall_v2:bookings") || "[]");
+    report("GEAR: manager approved pending booking", bookings.find(b => b.id === "BK-002").status === "approved");
+    // conflict detection: new booking overlapping BK-003 (approved, days +3..+5) for GW-CAM-003
+    const overlapStart = new Date(Date.now() + 4 * 86400000).toISOString().slice(0, 10);
+    w.showBookingModal(overlapStart);
+    await sleep(300);
+    d.querySelector("#bkEnd").value = overlapStart;
+    d.querySelector("#bkEnd").dispatchEvent(new w.Event("change"));
+    await sleep(200);
+    const cam3cb = d.querySelector("#bkGearPick input[value='GW-CAM-003']");
+    report("GEAR: clashing gear disabled in booking modal", cam3cb && cam3cb.disabled);
+    const cam3label = cam3cb && cam3cb.closest("label");
+    report("GEAR: clash reason shown", cam3label && cam3label.textContent.includes("Brand film"));
+    w.closeModal();
+    // manage: add gear via manager UI
+    w.setTab("manage");
+    await sleep(300);
+    d.querySelector("#mAdd").click();
+    await sleep(200);
+    d.querySelector("#ngName") || null; // old id — should not exist
+    d.querySelector("#gName").value = "Sony A7 IV";
+    d.querySelector("#gSave").click();
+    await sleep(500);
+    const gear = JSON.parse(localStorage.getItem("gearwall_v2:gear") || "[]");
+    report("GEAR: manager added new gear with generated id", gear.some(g => g.name === "Sony A7 IV" && /^GW-CAM-\d+$/.test(g.id)));
+  } catch (e) { report("GEAR: exception", false, e.message); }
+  wipe("gearwall_v2");
+  sessionStorage.clear();
 }
 
+/* ================= Katta Knowledge ================= */
 async function testKatta() {
+  wipe("katta_v2");
   localStorage.removeItem("katta_history_v1");
   const w = await loadFrame("../katta-knowledge/index.html");
-  await sleep(300);
+  await sleep(700); // async boot + seed
   const d = w.document;
   try {
-    report("Katta: chips render", d.querySelectorAll("#chips .chip").length === 8);
-    // engine unit tests
+    report("KATTA: episodes seeded into store", (JSON.parse(localStorage.getItem("katta_v2:episodes") || "[]")).length === 8);
+    report("KATTA: chips render", d.querySelectorAll("#chips .chip").length === 8);
     const r1 = w.search("What is GTO?");
-    report("Katta: GTO retrieves poker episode @14:32", r1.best && r1.best.ep.id === "katta-01" && r1.best.seg.t === "14:32");
+    report("KATTA: GTO retrieves S01 @14:32", r1.best && r1.best.ep.id === "katta-01" && r1.best.seg.t === "14:32");
     const r2 = w.search("what makes a good hire");
-    report("Katta: hiring question retrieves S02", r2.best && r2.best.ep.id === "katta-02");
-    const r3 = w.search("how do we reduce coordination costs");
-    report("Katta: coordination costs retrieves S03", r3.best && r3.best.ep.id === "katta-03");
-    const r4 = w.search("completely unrelated quantum jellyfish recipe");
-    report("Katta: nonsense query returns no match", !r4.best);
-    // full ask flow (thinking delay ~0.9-1.6s, then typewriter)
+    report("KATTA: hiring retrieves S02", r2.best && r2.best.ep.id === "katta-02");
+    const r4 = w.search("quantum jellyfish recipe");
+    report("KATTA: nonsense query returns no match", !r4.best);
     w.ask("What is GTO?");
     await sleep(2200);
-    report("Katta: answer card appears", !!d.querySelector(".answer-card"));
+    report("KATTA: answer card appears", !!d.querySelector(".answer-card"));
     await sleep(3000);
     const txt = d.querySelector(".answer-text");
-    report("Katta: typewriter produced text", txt && txt.textContent.length > 80, (txt ? txt.textContent.length : 0) + " chars");
-    report("Katta: source card cites timestamp", !!d.querySelector(".ts-chip") && d.body.textContent.includes("14:32"));
-    report("Katta: hover preview exists", !!d.querySelector(".source-card .preview"));
-    const hist = JSON.parse(localStorage.getItem("katta_history_v1") || "[]");
-    report("Katta: history persisted", hist.length === 1 && hist[0].q === "What is GTO?");
-  } catch (e) { report("Katta: exception", false, e.message); }
+    report("KATTA: typewriter produced text", txt && txt.textContent.length > 80, (txt ? txt.textContent.length : 0) + " chars");
+    report("KATTA: source cites timestamp", d.body.textContent.includes("14:32"));
+    // curator: add an episode through the admin editor
+    d.querySelector("#adminBtn").click();
+    await sleep(200);
+    d.querySelector("#pinInput").value = "1234";
+    d.querySelector("#pinGo").click();
+    await sleep(300);
+    d.querySelector("#cpAdd").click();
+    await sleep(200);
+    d.querySelector("#epTitle").value = "Test Session: Focus";
+    d.querySelector("#epSegs").value = "@ 05:10 | focus, deep, work\nDeep work means long uninterrupted blocks protected on the calendar.";
+    d.querySelector("#epSave").click();
+    await sleep(500);
+    const eps = JSON.parse(localStorage.getItem("katta_v2:episodes") || "[]");
+    report("KATTA: curator added episode via UI", eps.length === 9 && eps.some(e => e.title === "Test Session: Focus"));
+    const r5 = w.search("how does deep work focus happen");
+    report("KATTA: new episode immediately searchable", r5.best && r5.best.ep.title === "Test Session: Focus");
+  } catch (e) { report("KATTA: exception", false, e.message); }
+  wipe("katta_v2");
   localStorage.removeItem("katta_history_v1");
 }
 
 (async () => {
-  await testVM();
+  await testAcademy();
   await testGear();
   await testKatta();
   const fails = results.filter(r => r.startsWith("FAIL")).length;
   results.push("");
-  results.push(fails === 0 ? "ALL TESTS PASSED (" + results.length + " checks)" : fails + " FAILURES");
+  results.push(fails === 0 ? "ALL TESTS PASSED (" + results.filter(r => r.startsWith("PASS")).length + " checks)" : fails + " FAILURES");
   document.getElementById("results").textContent = results.join("\n");
   document.title = fails === 0 ? "TESTS-OK" : "TESTS-FAILED";
 })();

@@ -1,10 +1,11 @@
-// Katta Knowledge Interface — episode knowledge base
-// Each episode has timestamped segments. The local answer engine scores
+// Katta Knowledge Interface — DEMO episode knowledge base (seed data).
+// On first run seed.js writes these into the database; after that the app
+// reads episodes from the Store, and new episodes are authored in the
+// admin panel (or imported as JSON). The local answer engine scores
 // segments against your question and cites episode + exact timestamp.
-// (In production this would be embeddings + an LLM; here it's a fully local
-// retrieval engine so the app runs with zero keys — swap engine.js if needed.)
+// (In production swap search() for embeddings + an LLM; the UI is unchanged.)
 
-const EPISODES = [
+const SEED_EPISODES = [
   {
     id: "katta-01",
     no: 1,

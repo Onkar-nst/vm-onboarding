@@ -207,6 +207,14 @@ header .spacer { flex: 1; }
 }
 .btn:hover { border-color: var(--gold-deep); color: var(--gold); }
 
+.adm-input {
+  width: 100%; padding: 10px 13px; background: var(--panel); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 10px; font: inherit; font-size: 14px;
+}
+.adm-input:focus { outline: 2px solid var(--gold-deep); border-color: transparent; }
+textarea.adm-input { resize: vertical; }
+.modal .actions { display: flex; gap: 10px; justify-content: flex-end; align-items: center; }
+
 footer {
   text-align: center; color: #5c5340; font-size: 12px; padding: 30px 20px 40px;
   line-height: 1.7;

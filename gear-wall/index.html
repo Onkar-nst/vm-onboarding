@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Gear Wall — Equipment Tracking</title>
+<title>Gear Wall — Equipment & Booking Management</title>
 <link rel="stylesheet" href="styles.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>📷</text></svg>">
 </head>
@@ -11,26 +11,27 @@
   <header>
     <div class="logo">
       <span class="mark">▣</span>
-      <span>Gear<span style="color:var(--amber)">Wall</span><div class="logo-sub">Equipment · Bookings · QR</div></span>
+      <span>Gear<span style="color:var(--amber)">Wall</span><div class="logo-sub" id="orgName">…</div></span>
     </div>
     <nav>
       <button data-tab="wall" class="active">Wall</button>
       <button data-tab="calendar" id="calTabBtn">Calendar</button>
       <button data-tab="scanner">Scanner</button>
-      <button data-tab="activity">Activity</button>
+      <button data-tab="activity" id="actTabBtn">Activity</button>
+      <button data-tab="manage" id="manageTabBtn" style="display:none">Manage</button>
+      <button data-tab="settings" id="settingsTabBtn" style="display:none">Settings</button>
     </nav>
-    <span id="pendingBadge"></span>
     <div class="spacer"></div>
-    <div class="admin-toggle">
-      <span id="adminLabel">Crew mode</span>
-      <div class="switch" id="adminSwitch" role="switch" aria-label="Toggle admin mode"><i></i></div>
-    </div>
+    <select id="memberSel" class="member-sel" aria-label="Current member"></select>
   </header>
   <main class="wrap" id="view"></main>
   <div id="toast"></div>
   <script src="vendor/qrcode.min.js"></script>
   <script src="vendor/jsqr.min.js"></script>
-  <script src="data.js"></script>
+  <script src="config.js"></script>
+  <script src="store.js"></script>
+  <script src="seed.js"></script>
   <script src="app.js"></script>
+  <script src="manage.js"></script>
 </body>
 </html>

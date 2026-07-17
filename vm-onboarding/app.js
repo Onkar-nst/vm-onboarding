@@ -1,42 +1,62 @@
-/* VM Onboarding — app logic
- * Views: login → home (module grid) → module → final quiz → final edit → done
- * Admin view shows every profile's progress, gaps and submissions.
- * All state persists in localStorage.
+/* Onboarding Academy — learner experience + shared core.
+ * Lead tools (dashboard, review queue, course builder, people, settings) are in builder.js.
+ * All persistence goes through Store (store.js); backend chosen in config.js.
  */
 
-const LS_PROFILES = "vmob_profiles";   // { [name]: profile }
-const LS_CURRENT = "vmob_current";     // name of active profile
-const LS_SUBMISSIONS = "vmob_submissions"; // [ {name, link, notes, checklist, at} ]
-
 const $ = (sel, el = document) => el.querySelector(sel);
+const $$ = (sel, el = document) => [...el.querySelectorAll(sel)];
 const app = $("#app");
 
-/* ---------------- state ---------------- */
+/* ---------------- cache ---------------- */
 
-function loadProfiles() { return JSON.parse(localStorage.getItem(LS_PROFILES) || "{}"); }
-function saveProfiles(p) { localStorage.setItem(LS_PROFILES, JSON.stringify(p)); }
-function loadSubmissions() { return JSON.parse(localStorage.getItem(LS_SUBMISSIONS) || "[]"); }
-function saveSubmissions(s) { localStorage.setItem(LS_SUBMISSIONS, JSON.stringify(s)); }
+const cache = { settings: null, courses: [], modules: [], people: [], progress: [], submissions: [] };
 
-function newProfile(name) {
-  return {
-    name,
-    createdAt: Date.now(),
-    passed: [],            // module ids passed
-    wrongAnswers: [],      // { moduleId, question, picked } — the "gaps"
-    finalQuiz: null,       // { score, total, wrong: [q], at }
-    finalEdit: null        // { link, notes, checklist: [bool], at }
-  };
+async function refresh() {
+  const [settingsList, courses, modules, people, progress, submissions] = await Promise.all([
+    Store.list("settings"), Store.list("courses"), Store.list("modules"),
+    Store.list("people"), Store.list("progress"), Store.list("submissions")
+  ]);
+  cache.settings = settingsList.find(s => s.id === "settings") || { id: "settings", orgName: "Your Agency", adminPin: "1234" };
+  cache.courses = courses.sort((a, b) => (a.order || 0) - (b.order || 0));
+  cache.modules = modules;
+  cache.people = people.filter(p => p.active !== false);
+  cache.progress = progress;
+  cache.submissions = submissions;
 }
 
-let profiles = loadProfiles();
-let currentName = localStorage.getItem(LS_CURRENT) || null;
-let me = currentName ? profiles[currentName] : null;
+/* ---------------- session ---------------- */
 
-function persist() {
-  if (me) profiles[me.name] = me;
-  saveProfiles(profiles);
+let me = null;            // person doc
+let courseId = null;      // active course
+let leadUnlocked = false; // PIN entered this session
+
+function isLead() { return me && me.role === "lead" && leadUnlocked; }
+
+function modulesOf(cid) {
+  return cache.modules.filter(m => m.courseId === cid).sort((a, b) => (a.order || 0) - (b.order || 0));
 }
+function courseById(cid) { return cache.courses.find(c => c.id === cid); }
+function personById(pid) { return cache.people.find(p => p.id === pid) || { name: "Unknown" }; }
+function progressOf(pid, cid) {
+  return cache.progress.find(p => p.personId === pid && p.courseId === cid) || null;
+}
+async function ensureProgress(pid, cid) {
+  let p = progressOf(pid, cid);
+  if (!p) {
+    p = { id: pid + ":" + cid, personId: pid, courseId: cid, passed: [], wrongAnswers: [], finalQuiz: null };
+    await Store.put("progress", p);
+    cache.progress.push(p);
+  }
+  return p;
+}
+function submissionOf(pid, cid) {
+  return cache.submissions.filter(s => s.personId === pid && s.courseId === cid).sort((a, b) => b.at - a.at)[0] || null;
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function fmtDate(ts) { return new Date(ts).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }); }
 
 /* ---------------- confetti ---------------- */
 
@@ -44,53 +64,38 @@ const confettiCanvas = $("#confetti");
 const ctx = confettiCanvas.getContext("2d");
 let confettiPieces = [];
 let confettiRunning = false;
-
-function resizeConfetti() {
-  confettiCanvas.width = window.innerWidth;
-  confettiCanvas.height = window.innerHeight;
-}
+function resizeConfetti() { confettiCanvas.width = window.innerWidth; confettiCanvas.height = window.innerHeight; }
 window.addEventListener("resize", resizeConfetti);
 resizeConfetti();
-
 function burstConfetti(big = false) {
   const colors = ["#ff5c29", "#ffb020", "#1f9d55", "#4a90d9", "#e858a1", "#f5efe4"];
   const count = big ? 220 : 120;
   const cx = window.innerWidth / 2;
   for (let i = 0; i < count; i++) {
     confettiPieces.push({
-      x: cx + (Math.random() - 0.5) * 240,
-      y: window.innerHeight * (big ? 0.45 : 0.35),
-      vx: (Math.random() - 0.5) * 14,
-      vy: -6 - Math.random() * 10,
-      w: 6 + Math.random() * 6,
-      h: 8 + Math.random() * 8,
-      rot: Math.random() * Math.PI,
-      vr: (Math.random() - 0.5) * 0.3,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      life: 130 + Math.random() * 60
+      x: cx + (Math.random() - 0.5) * 240, y: window.innerHeight * (big ? 0.45 : 0.35),
+      vx: (Math.random() - 0.5) * 14, vy: -6 - Math.random() * 10,
+      w: 6 + Math.random() * 6, h: 8 + Math.random() * 8,
+      rot: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.3,
+      color: colors[Math.floor(Math.random() * colors.length)], life: 130 + Math.random() * 60
     });
   }
   if (!confettiRunning) { confettiRunning = true; tickConfetti(); }
 }
-
 function tickConfetti() {
   ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height);
   confettiPieces.forEach(p => {
     p.x += p.vx; p.y += p.vy; p.vy += 0.32; p.vx *= 0.99; p.rot += p.vr; p.life--;
-    ctx.save();
-    ctx.translate(p.x, p.y);
-    ctx.rotate(p.rot);
+    ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot);
     ctx.globalAlpha = Math.max(0, Math.min(1, p.life / 40));
-    ctx.fillStyle = p.color;
-    ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
-    ctx.restore();
+    ctx.fillStyle = p.color; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); ctx.restore();
   });
   confettiPieces = confettiPieces.filter(p => p.life > 0 && p.y < confettiCanvas.height + 40);
   if (confettiPieces.length) requestAnimationFrame(tickConfetti);
   else { confettiRunning = false; ctx.clearRect(0, 0, confettiCanvas.width, confettiCanvas.height); }
 }
 
-/* ---------------- toast ---------------- */
+/* ---------------- toast & modal ---------------- */
 
 let toastTimer;
 function toast(msg) {
@@ -100,159 +105,254 @@ function toast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => t.classList.remove("show"), 2600);
 }
-
-/* ---------------- helpers ---------------- */
-
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+function openModal(html) {
+  closeModal();
+  const back = document.createElement("div");
+  back.className = "modal-back";
+  back.id = "modalBack";
+  back.innerHTML = `<div class="modal">${html}</div>`;
+  document.body.appendChild(back);
+  back.addEventListener("click", e => { if (e.target === back) closeModal(); });
+  $$("[data-close]", back).forEach(b => b.addEventListener("click", closeModal));
 }
-function moduleState(mod, idx) {
-  if (me.passed.includes(mod.id)) return "passed";
-  const firstLockedIdx = COURSE.modules.findIndex(m => !me.passed.includes(m.id));
-  return idx === firstLockedIdx ? "available" : "locked";
+function closeModal() { const m = $("#modalBack"); if (m) m.remove(); }
+
+async function requireLead(then) {
+  if (isLead()) return then();
+  if (!me || me.role !== "lead") { toast("Switch to a lead profile first"); return; }
+  openModal(`
+    <h3>Lead PIN</h3>
+    <p class="sub-p">Enter the admin PIN to unlock lead tools for this session.</p>
+    <input id="pinInput" type="password" inputmode="numeric" maxlength="8" autocomplete="off" class="modal-input" placeholder="PIN">
+    <div class="m-actions">
+      <button class="btn" data-close>Cancel</button>
+      <button class="btn accent" id="pinGo">Unlock</button>
+    </div>`);
+  const tryPin = () => {
+    if ($("#pinInput").value === String(cache.settings.adminPin)) {
+      leadUnlocked = true;
+      closeModal(); toast("Lead tools unlocked"); setHeader(); then();
+    } else { toast("Wrong PIN"); $("#pinInput").value = ""; $("#pinInput").focus(); }
+  };
+  $("#pinGo").addEventListener("click", tryPin);
+  $("#pinInput").addEventListener("keydown", e => { if (e.key === "Enter") tryPin(); });
+  $("#pinInput").focus();
 }
-function allModulesPassed() { return COURSE.modules.every(m => me.passed.includes(m.id)); }
-function finalQuizPassed() { return me.finalQuiz && me.finalQuiz.score >= COURSE.finalQuiz.passScore; }
-function fmtDate(ts) { return new Date(ts).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }); }
+
+/* ---------------- header ---------------- */
 
 function setHeader() {
+  $("#orgLabel").textContent = cache.settings.orgName + " Academy";
   const pill = $("#progressPill");
-  const adminBtn = $("#adminBtn");
+  const leadsBtn = $("#adminBtn");
   const switchBtn = $("#switchBtn");
-  if (!me) { pill.style.display = "none"; adminBtn.style.display = "none"; switchBtn.style.display = "none"; return; }
-  pill.style.display = "";
-  adminBtn.style.display = "";
+  if (!me) { pill.style.display = "none"; leadsBtn.style.display = "none"; switchBtn.style.display = "none"; return; }
   switchBtn.style.display = "";
-  const total = COURSE.modules.length;
-  pill.innerHTML = `<b>${esc(me.name)}</b> &middot; ${me.passed.length}/${total} modules`;
+  leadsBtn.style.display = me.role === "lead" ? "" : "none";
+  if (courseId) {
+    const mods = modulesOf(courseId);
+    const prog = progressOf(me.id, courseId);
+    pill.style.display = "";
+    pill.innerHTML = `<b>${esc(me.name)}</b> · ${prog ? prog.passed.filter(id => mods.some(m => m.id === id)).length : 0}/${mods.length} modules`;
+  } else {
+    pill.style.display = "";
+    pill.innerHTML = `<b>${esc(me.name)}</b>`;
+  }
 }
 
-/* ---------------- views ---------------- */
+/* ---------------- router ---------------- */
 
 function render(view, arg) {
   setHeader();
   if (!me) return viewLogin();
+  if (view === "lead") return renderLeadArea(arg);        // builder.js
+  if (!courseId) return viewCourses();
   switch (view) {
     case "module": return viewModule(arg);
     case "finalQuiz": return viewFinalQuiz();
-    case "finalEdit": return viewFinalEdit();
+    case "assignment": return viewAssignment();
     case "done": return viewDone();
-    case "admin": return viewAdmin();
     default: return viewHome();
   }
 }
 
-/* ----- login ----- */
+/* ---------------- login ---------------- */
 
 function viewLogin() {
+  const options = cache.people.map(p =>
+    `<button class="person-btn" data-pid="${p.id}">${esc(p.name)}${p.role === "lead" ? " <span class='lead-star'>★ lead</span>" : ""}</button>`).join("");
   app.innerHTML = `
     <div class="login-box">
-      <div class="big-icon">🎬</div>
-      <h2>VM Onboarding</h2>
-      <p>${esc(COURSE.tagline)}<br>Enter your name to start (or continue) your onboarding.</p>
-      <input id="nameInput" placeholder="Your name" maxlength="40" autocomplete="off">
-      <button class="btn accent" id="startBtn" style="width:100%">Start Onboarding</button>
+      <div class="big-icon">🎓</div>
+      <h2>${esc(cache.settings.orgName)} Academy</h2>
+      <p>Pick your profile, or join as a new team member.</p>
+      <div class="person-list">${options || "<p class='sub-p'>No profiles yet — create the first one below.</p>"}</div>
+      <div class="join-row">
+        <input id="nameInput" placeholder="New member name" maxlength="40" autocomplete="off">
+        <button class="btn accent" id="joinBtn">Join</button>
+      </div>
     </div>`;
-  const input = $("#nameInput");
-  const go = () => {
-    const name = input.value.trim();
-    if (!name) { input.focus(); return; }
-    currentName = name;
-    localStorage.setItem(LS_CURRENT, name);
-    if (!profiles[name]) profiles[name] = newProfile(name);
-    me = profiles[name];
-    persist();
-    toast(`Welcome, ${name}!`);
+  $$(".person-btn").forEach(b => b.addEventListener("click", () => {
+    me = cache.people.find(p => p.id === b.dataset.pid);
+    leadUnlocked = false;
+    sessionStorage.setItem("ac_person", me.id);
+    toast(`Welcome, ${me.name}`);
+    render("home");
+  }));
+  const join = async () => {
+    const name = $("#nameInput").value.trim();
+    if (!name) { $("#nameInput").focus(); return; }
+    const person = { id: await Store.nextId("PPL"), name, role: "trainee", active: true, createdAt: Date.now() };
+    await Store.put("people", person);
+    await refresh();
+    me = person;
+    sessionStorage.setItem("ac_person", me.id);
+    toast(`Welcome aboard, ${name}!`);
     render("home");
   };
-  $("#startBtn").addEventListener("click", go);
-  input.addEventListener("keydown", e => { if (e.key === "Enter") go(); });
-  input.focus();
+  $("#joinBtn").addEventListener("click", join);
+  $("#nameInput").addEventListener("keydown", e => { if (e.key === "Enter") join(); });
 }
 
-/* ----- home ----- */
+/* ---------------- course picker ---------------- */
 
-function viewHome() {
-  const total = COURSE.modules.length;
-  const passed = me.passed.length;
-  const cards = COURSE.modules.map((m, i) => {
-    const st = moduleState(m, i);
+function viewCourses() {
+  const active = cache.courses.filter(c => c.active !== false);
+  if (active.length === 1) { courseId = active[0].id; sessionStorage.setItem("ac_course", courseId); return render("home"); }
+  app.innerHTML = `
+    <div class="wrap">
+      <div class="hero"><div>
+        <h1>Choose your <span>track</span></h1>
+        <p>Your onboarding is split into tracks. Start with the one your lead assigned you.</p>
+      </div></div>
+      <div class="modules">
+        ${active.map(c => {
+          const mods = modulesOf(c.id);
+          const prog = me ? progressOf(me.id, c.id) : null;
+          const done = prog ? prog.passed.filter(id => mods.some(m => m.id === id)).length : 0;
+          return `<div class="mod-card clickable" data-cid="${c.id}">
+            <div class="icon">${c.icon || "📘"}</div>
+            <h3>${esc(c.title)}</h3>
+            <div class="meta">${mods.length} modules · ${esc(c.tagline || "")}</div>
+            <span class="state ${done === mods.length && mods.length ? "passed" : "available"}">${done}/${mods.length} done</span>
+          </div>`;
+        }).join("") || `<div class="empty">No active courses yet — a lead can create one in the Course Builder.</div>`}
+      </div>
+    </div>`;
+  $$("[data-cid]").forEach(c => c.addEventListener("click", () => {
+    courseId = c.dataset.cid;
+    sessionStorage.setItem("ac_course", courseId);
+    render("home");
+  }));
+}
+
+/* ---------------- home ---------------- */
+
+function moduleState(prog, mods, mod, idx) {
+  if (prog && prog.passed.includes(mod.id)) return "passed";
+  const firstOpen = mods.findIndex(m => !(prog && prog.passed.includes(m.id)));
+  return idx === firstOpen ? "available" : "locked";
+}
+
+async function viewHome() {
+  const course = courseById(courseId);
+  if (!course) { courseId = null; return render("home"); }
+  const mods = modulesOf(courseId);
+  const prog = await ensureProgress(me.id, courseId);
+  const passedCount = prog.passed.filter(id => mods.some(m => m.id === id)).length;
+  const allPassed = mods.length > 0 && passedCount === mods.length;
+  const fqPassed = prog.finalQuiz && prog.finalQuiz.score >= (course.finalQuiz.passScore || 1);
+  const sub = submissionOf(me.id, courseId);
+
+  const cards = mods.map((m, i) => {
+    const st = moduleState(prog, mods, m, i);
     const stateLabel = { locked: "🔒 Locked", available: "▶ Start", passed: "✓ Passed" }[st];
     return `
       <div class="mod-card ${st} ${st !== "locked" ? "clickable" : ""}" data-mod="${m.id}" data-state="${st}">
         <div class="idx">${String(i + 1).padStart(2, "0")}</div>
-        <div class="icon">${m.icon}</div>
+        <div class="icon">${m.icon || "📘"}</div>
         <h3>${esc(m.title)}</h3>
-        <div class="meta">${m.minutes} min &middot; ${m.sections.length} sections + quick check</div>
+        <div class="meta">${m.minutes || 5} min · ${m.sections.length} sections + quick check</div>
         <span class="state ${st}">${stateLabel}</span>
       </div>`;
   }).join("");
 
-  const fqState = !allModulesPassed() ? "locked" : (finalQuizPassed() ? "passed" : "available");
-  const feState = !finalQuizPassed() ? "locked" : (me.finalEdit ? "passed" : "available");
+  const fqState = !allPassed ? "locked" : (fqPassed ? "passed" : "available");
+  const subState = !fqPassed ? "locked" : (sub ? (sub.status === "approved" ? "passed" : "available") : "available");
+  const subLabel = !fqPassed ? "🔒 Pass the final quiz"
+    : !sub ? "▶ Start"
+    : sub.status === "approved" ? "✓ Approved"
+    : sub.status === "changes_requested" ? "✎ Changes requested"
+    : "⏳ In review";
 
   app.innerHTML = `
     <div class="wrap">
       <div class="hero">
         <div>
-          <h1>Welcome to <span>${esc(COURSE.team)}</span></h1>
-          <p>${esc(COURSE.tagline)} Each module unlocks the next once you nail the quick check. Finish with the final quiz and your day-one Final Edit.</p>
+          <h1>${course.icon || "📘"} <span>${esc(course.title)}</span></h1>
+          <p>${esc(course.tagline || "")} Each module unlocks the next once you nail the quick check.</p>
+          ${cache.courses.filter(c => c.active !== false).length > 1 ? `<p style="margin-top:6px"><a class="linkish" id="switchCourse">↩ switch track</a></p>` : ""}
         </div>
         <div class="hero-stats">
-          <div class="stat"><div class="n">${passed}/${total}</div><div class="l">Modules</div></div>
-          <div class="stat"><div class="n">${me.finalQuiz ? me.finalQuiz.score + "/" + me.finalQuiz.total : "—"}</div><div class="l">Final quiz</div></div>
-          <div class="stat"><div class="n">${me.finalEdit ? "✓" : "—"}</div><div class="l">Final edit</div></div>
+          <div class="stat"><div class="n">${passedCount}/${mods.length}</div><div class="l">Modules</div></div>
+          <div class="stat"><div class="n">${prog.finalQuiz ? prog.finalQuiz.score + "/" + prog.finalQuiz.total : "—"}</div><div class="l">Final quiz</div></div>
+          <div class="stat"><div class="n">${sub ? (sub.status === "approved" ? "✓" : sub.status === "changes_requested" ? "✎" : "⏳") : "—"}</div><div class="l">Assignment</div></div>
         </div>
       </div>
+      ${sub && sub.status === "changes_requested" ? `
+        <div class="feedback-banner">
+          <b>Your lead requested changes:</b> ${esc(sub.feedback || "See the assignment page.")}
+          <button class="btn sm-btn" id="goResubmit">Open assignment →</button>
+        </div>` : ""}
       <div class="modules">
         ${cards}
         <div class="mod-card special ${fqState} ${fqState !== "locked" ? "clickable" : ""}" id="finalQuizCard">
-          <div class="idx">🏁</div>
-          <div class="icon">📝</div>
+          <div class="idx">🏁</div><div class="icon">📝</div>
           <h3>Final Quiz</h3>
-          <div class="meta">${COURSE.finalQuiz.questions.length} questions &middot; pass ${COURSE.finalQuiz.passScore}+</div>
+          <div class="meta">${course.finalQuiz.questions.length} questions · pass ${course.finalQuiz.passScore}+</div>
           <span class="state ${fqState}">${fqState === "locked" ? "🔒 Finish all modules" : fqState === "passed" ? "✓ Passed" : "▶ Start"}</span>
         </div>
-        <div class="mod-card special ${feState} ${feState !== "locked" ? "clickable" : ""}" id="finalEditCard">
-          <div class="idx">🎞️</div>
-          <div class="icon">🚀</div>
-          <h3>Your Final Edit</h3>
-          <div class="meta">Day-one assignment &middot; checklist + submission</div>
-          <span class="state ${feState}">${feState === "locked" ? "🔒 Pass the final quiz" : feState === "passed" ? "✓ Submitted" : "▶ Start"}</span>
+        <div class="mod-card special ${subState === "locked" ? "locked" : ""} ${subState !== "locked" ? "clickable" : ""}" id="assignmentCard">
+          <div class="idx">🎞️</div><div class="icon">🚀</div>
+          <h3>${esc(course.assignment.title)}</h3>
+          <div class="meta">Practical assignment · checklist + review</div>
+          <span class="state ${subState === "passed" ? "passed" : subState === "locked" ? "locked" : "available"}">${subLabel}</span>
         </div>
       </div>
     </div>`;
 
-  app.querySelectorAll(".mod-card[data-mod]").forEach(card => {
+  $$(".mod-card[data-mod]").forEach(card => {
     if (card.dataset.state === "locked") return;
     card.addEventListener("click", () => render("module", card.dataset.mod));
   });
-  if (fqState !== "locked") $("#finalQuizCard").addEventListener("click", () => render(fqState === "passed" ? "home" : "finalQuiz"));
-  if (feState !== "locked") $("#finalEditCard").addEventListener("click", () => render(me.finalEdit ? "done" : "finalEdit"));
+  if (fqState !== "locked" && !fqPassed) $("#finalQuizCard").addEventListener("click", () => render("finalQuiz"));
+  if (subState !== "locked") $("#assignmentCard").addEventListener("click", () => render(sub && sub.status !== "changes_requested" ? "done" : "assignment"));
+  const sw = $("#switchCourse");
+  if (sw) sw.addEventListener("click", () => { courseId = null; sessionStorage.removeItem("ac_course"); render("home"); });
+  const rs = $("#goResubmit");
+  if (rs) rs.addEventListener("click", () => render("assignment"));
 }
 
-/* ----- module ----- */
+/* ---------------- module ---------------- */
 
-function viewModule(id) {
-  const idx = COURSE.modules.findIndex(m => m.id === id);
-  const mod = COURSE.modules[idx];
-  const alreadyPassed = me.passed.includes(id);
+function viewModule(modId) {
+  const mods = modulesOf(courseId);
+  const idx = mods.findIndex(m => m.id === modId);
+  const mod = mods[idx];
+  const prog = progressOf(me.id, courseId);
+  const alreadyPassed = prog.passed.includes(mod.id);
 
   const sections = mod.sections.map(s => `
-    <div class="lesson">
-      <h2>${esc(s.h)}</h2>
-      <div class="body">${s.body}</div>
-    </div>`).join("");
-
+    <div class="lesson"><h2>${esc(s.h)}</h2><div class="body">${s.body}</div></div>`).join("");
   const opts = mod.quiz.options.map((o, i) => `
-    <button class="opt" data-i="${i}"><span class="key">${"ABCD"[i]}</span> ${esc(o)}</button>`).join("");
+    <button class="opt" data-i="${i}"><span class="key">${"ABCD"[i] || i + 1}</span> ${esc(o)}</button>`).join("");
 
   app.innerHTML = `
     <div class="wrap">
       <div class="mod-head">
-        <div class="crumb"><a id="backHome">← All modules</a> &nbsp;/&nbsp; Module ${idx + 1} of ${COURSE.modules.length}</div>
-        <h1>${mod.icon} ${esc(mod.title)}</h1>
-        <p class="sub">${esc(mod.intro)}</p>
+        <div class="crumb"><a id="backHome">← All modules</a> &nbsp;/&nbsp; Module ${idx + 1} of ${mods.length}</div>
+        <h1>${mod.icon || "📘"} ${esc(mod.title)}</h1>
+        <p class="sub">${esc(mod.intro || "")}</p>
       </div>
       ${sections}
       <div class="quiz">
@@ -260,92 +360,84 @@ function viewModule(id) {
         <h2>${esc(mod.quiz.q)}</h2>
         <div class="opts">${opts}</div>
         <div class="feedback" id="quizFeedback"></div>
-        <div class="actions">
-          <button class="btn primary" id="nextBtn" style="display:none">Continue →</button>
-        </div>
+        <div class="actions"><button class="btn primary" id="nextBtn" style="display:none">Continue →</button></div>
       </div>
     </div>`;
 
   $("#backHome").addEventListener("click", () => render("home"));
-
-  const optBtns = [...app.querySelectorAll(".opt")];
-  const feedback = $("#quizFeedback");
   const nextBtn = $("#nextBtn");
   let solved = false;
-
-  optBtns.forEach(btn => btn.addEventListener("click", () => {
+  $$(".opt", app).forEach(btn => btn.addEventListener("click", async () => {
     if (solved) return;
     const i = Number(btn.dataset.i);
+    const feedback = $("#quizFeedback");
     if (i === mod.quiz.correct) {
       solved = true;
       btn.classList.add("right");
       feedback.className = "feedback good";
-      feedback.textContent = "Correct! " + mod.quiz.explain;
+      feedback.textContent = "Correct! " + (mod.quiz.explain || "");
       burstConfetti();
-      if (!me.passed.includes(mod.id)) {
-        me.passed.push(mod.id);
-        persist();
-        toast(idx + 1 < COURSE.modules.length ? "Module passed — next one unlocked!" : "All modules passed!");
+      if (!prog.passed.includes(mod.id)) {
+        prog.passed.push(mod.id);
+        await Store.put("progress", prog);
+        toast(idx + 1 < mods.length ? "Module passed — next one unlocked!" : "All modules passed!");
       }
       nextBtn.style.display = "";
-      nextBtn.textContent = idx + 1 < COURSE.modules.length ? `Next: ${COURSE.modules[idx + 1].title} →` : "Go to Final Quiz →";
-      nextBtn.onclick = () => idx + 1 < COURSE.modules.length ? render("module", COURSE.modules[idx + 1].id) : render("finalQuiz");
+      nextBtn.textContent = idx + 1 < mods.length ? `Next: ${mods[idx + 1].title} →` : "Go to Final Quiz →";
+      nextBtn.onclick = () => idx + 1 < mods.length ? render("module", mods[idx + 1].id) : render("finalQuiz");
       setHeader();
     } else {
       btn.classList.add("wrong");
       btn.disabled = true;
       feedback.className = "feedback bad";
       feedback.textContent = "Wrong — check the sections above and try again.";
-      me.wrongAnswers.push({ moduleId: mod.id, module: mod.title, question: mod.quiz.q, picked: mod.quiz.options[i], at: Date.now() });
-      persist();
+      prog.wrongAnswers.push({ moduleId: mod.id, module: mod.title, question: mod.quiz.q, picked: mod.quiz.options[i], at: Date.now() });
+      await Store.put("progress", prog);
     }
   }));
 }
 
-/* ----- final quiz ----- */
+/* ---------------- final quiz ---------------- */
 
 function viewFinalQuiz() {
-  const qs = COURSE.finalQuiz.questions;
-  let qi = 0;
-  let score = 0;
+  const course = courseById(courseId);
+  const qs = course.finalQuiz.questions;
+  const prog = progressOf(me.id, courseId);
+  let qi = 0, score = 0;
   const wrong = [];
 
   function draw() {
     if (qi >= qs.length) return finish();
     const q = qs[qi];
-    const opts = q.options.map((o, i) => `
-      <button class="opt" data-i="${i}"><span class="key">${"ABCD"[i]}</span> ${esc(o)}</button>`).join("");
     app.innerHTML = `
       <div class="wrap" style="max-width:760px">
         <div class="mod-head">
           <div class="crumb"><a id="backHome">← All modules</a> &nbsp;/&nbsp; Final Quiz</div>
-          <h1>📝 ${esc(COURSE.finalQuiz.title)}</h1>
-          <p class="sub">One attempt per question. Score ${COURSE.finalQuiz.passScore}+ of ${qs.length} to unlock your Final Edit.</p>
+          <h1>📝 Final Quiz</h1>
+          <p class="sub">One attempt per question. Score ${course.finalQuiz.passScore}+ of ${qs.length} to unlock the assignment.</p>
         </div>
-        <div class="fq-progress">Question ${qi + 1} of ${qs.length} &middot; score ${score}</div>
+        <div class="fq-progress">Question ${qi + 1} of ${qs.length} · score ${score}</div>
         <div class="fq-bar"><i style="width:${(qi / qs.length) * 100}%"></i></div>
         <div class="quiz">
           <div class="tag">Final quiz</div>
           <h2>${esc(q.q)}</h2>
-          <div class="opts">${opts}</div>
+          <div class="opts">${q.options.map((o, i) => `<button class="opt" data-i="${i}"><span class="key">${"ABCD"[i] || i + 1}</span> ${esc(o)}</button>`).join("")}</div>
           <div class="feedback" id="quizFeedback"></div>
         </div>
       </div>`;
     $("#backHome").addEventListener("click", () => render("home"));
     let answered = false;
-    app.querySelectorAll(".opt").forEach(btn => btn.addEventListener("click", () => {
+    $$(".opt", app).forEach(btn => btn.addEventListener("click", () => {
       if (answered) return;
       answered = true;
       const i = Number(btn.dataset.i);
+      $$(".opt", app).forEach(b => b.disabled = true);
       const fb = $("#quizFeedback");
-      app.querySelectorAll(".opt").forEach(b => b.disabled = true);
-      if (i === q.correct) {
-        score++;
-        btn.classList.add("right");
-        fb.className = "feedback good"; fb.textContent = "Correct!";
-      } else {
+      if (i === q.correct) { score++; btn.classList.add("right"); fb.className = "feedback good"; fb.textContent = "Correct!"; }
+      else {
         btn.classList.add("wrong");
-        app.querySelector(`.opt[data-i="${q.correct}"]`).classList.add("right");
+        const right = app.querySelector(`.opt[data-i="${q.correct}"]`);
+        if (right) right.classList.add("right");
         fb.className = "feedback bad"; fb.textContent = "Not this one.";
         wrong.push(q.q);
       }
@@ -353,10 +445,10 @@ function viewFinalQuiz() {
     }));
   }
 
-  function finish() {
-    const passed = score >= COURSE.finalQuiz.passScore;
-    me.finalQuiz = { score, total: qs.length, wrong, at: Date.now() };
-    persist();
+  async function finish() {
+    const passed = score >= course.finalQuiz.passScore;
+    prog.finalQuiz = { score, total: qs.length, wrong, at: Date.now() };
+    await Store.put("progress", prog);
     if (passed) burstConfetti(true);
     app.innerHTML = `
       <div class="wrap" style="max-width:640px">
@@ -364,187 +456,127 @@ function viewFinalQuiz() {
           <div class="big">${passed ? "🏆" : "😬"}</div>
           <h1>${passed ? "Final quiz passed!" : "Not quite there yet"}</h1>
           <p>You scored <b>${score} / ${qs.length}</b>. ${passed
-            ? "Your Final Edit assignment is now unlocked — that's the real test."
-            : `You need ${COURSE.finalQuiz.passScore}+ to pass. Re-read the modules and take it again — the gaps are logged for your lead.`}</p>
-          <button class="btn accent" id="fqNext">${passed ? "Go to Final Edit →" : "Retake quiz"}</button>
+            ? "The practical assignment is now unlocked — that's the real test."
+            : `You need ${course.finalQuiz.passScore}+ to pass. Re-read the modules and take it again — gaps are logged for your lead.`}</p>
+          <button class="btn accent" id="fqNext">${passed ? "Go to assignment →" : "Retake quiz"}</button>
           <button class="btn ghost" id="fqHome">Back to modules</button>
         </div>
       </div>`;
-    $("#fqNext").addEventListener("click", () => passed ? render("finalEdit") : render("finalQuiz"));
+    $("#fqNext").addEventListener("click", () => passed ? render("assignment") : render("finalQuiz"));
     $("#fqHome").addEventListener("click", () => render("home"));
   }
-
   draw();
 }
 
-/* ----- final edit ----- */
+/* ---------------- assignment (submit / resubmit) ---------------- */
 
-function viewFinalEdit() {
-  const fe = COURSE.finalEdit;
-  const items = fe.checklist.map((c, i) => `
-    <label class="check-item" data-i="${i}">
+function viewAssignment() {
+  const course = courseById(courseId);
+  const a = course.assignment;
+  const prev = submissionOf(me.id, courseId);
+  const resubmitting = prev && prev.status === "changes_requested";
+
+  const items = a.checklist.map((c, i) => `
+    <label class="check-item ${resubmitting && prev.gapItems.includes(i) ? "gap" : ""}" data-i="${i}">
       <input type="checkbox" data-i="${i}">
-      <span>${esc(c)}</span>
+      <span>${esc(c)}${resubmitting && prev.gapItems.includes(i) ? " <b class='gap-flag'>← fix this</b>" : ""}</span>
     </label>`).join("");
 
   app.innerHTML = `
     <div class="wrap" style="max-width:760px">
       <div class="mod-head">
-        <div class="crumb"><a id="backHome">← All modules</a> &nbsp;/&nbsp; Final Edit</div>
-        <h1>🎞️ ${esc(fe.title)}</h1>
+        <div class="crumb"><a id="backHome">← All modules</a> &nbsp;/&nbsp; ${esc(a.title)}</div>
+        <h1>🎞️ ${esc(a.title)}${resubmitting ? " — resubmission" : ""}</h1>
       </div>
-      <div class="brief">${fe.brief}</div>
+      ${resubmitting ? `<div class="feedback-banner"><b>Lead feedback:</b> ${esc(prev.feedback || "")}</div>` : ""}
+      <div class="brief">${a.brief}</div>
       <h3 style="margin-bottom:12px">Self-check every item before you submit</h3>
       <div class="check-list">${items}</div>
       <div class="submit-form">
-        <label>Link to your reel</label>
-        <input id="linkInput" placeholder="Drive / Frame.io / YouTube link" autocomplete="off">
-        <div class="hint">Upload anywhere your lead can open — Drive, Frame.io or an unlisted YouTube link.</div>
+        <label>Link to your work</label>
+        <input id="linkInput" placeholder="Drive / Frame.io / YouTube link" autocomplete="off" value="${resubmitting ? esc(prev.link) : ""}">
         <label>Notes for your reviewer</label>
-        <textarea id="notesInput" placeholder="Anything you struggled with, choices you made, questions you have…"></textarea>
+        <textarea id="notesInput" placeholder="Anything you struggled with, choices you made…">${resubmitting ? esc(prev.notes) : ""}</textarea>
         <div style="margin-top:20px; display:flex; gap:10px; align-items:center">
-          <button class="btn accent" id="submitBtn" disabled>Submit for review</button>
-          <span class="hint" id="submitHint">Check all ${fe.checklist.length} items and add your link to submit.</span>
+          <button class="btn accent" id="submitBtn" disabled>${resubmitting ? "Resubmit for review" : "Submit for review"}</button>
+          <span class="hint" id="submitHint"></span>
         </div>
       </div>
     </div>`;
 
   $("#backHome").addEventListener("click", () => render("home"));
-  const boxes = [...app.querySelectorAll(".check-item input")];
+  const boxes = $$(".check-item input", app);
   const linkInput = $("#linkInput");
   const submitBtn = $("#submitBtn");
-
-  function refresh() {
+  function refreshForm() {
     boxes.forEach(b => b.closest(".check-item").classList.toggle("done", b.checked));
     const allChecked = boxes.every(b => b.checked);
     const hasLink = linkInput.value.trim().length > 4;
     submitBtn.disabled = !(allChecked && hasLink);
-    $("#submitHint").textContent = allChecked
-      ? (hasLink ? "Ready to submit." : "Add your reel link to submit.")
-      : `Check all ${fe.checklist.length} items and add your link to submit.`;
+    $("#submitHint").textContent = allChecked ? (hasLink ? "Ready to submit." : "Add your link to submit.")
+      : `Check all ${a.checklist.length} items and add your link.`;
   }
-  boxes.forEach(b => b.addEventListener("change", refresh));
-  linkInput.addEventListener("input", refresh);
+  boxes.forEach(b => b.addEventListener("change", refreshForm));
+  linkInput.addEventListener("input", refreshForm);
+  refreshForm();
 
-  submitBtn.addEventListener("click", () => {
-    const record = {
-      name: me.name,
+  submitBtn.addEventListener("click", async () => {
+    const doc = {
+      id: resubmitting ? prev.id : await Store.nextId("SUB"),
+      personId: me.id, courseId,
       link: linkInput.value.trim(),
       notes: $("#notesInput").value.trim(),
       checklist: boxes.map(b => b.checked),
-      at: Date.now()
+      at: Date.now(),
+      status: "submitted", feedback: resubmitting ? prev.feedback : "", gapItems: [], reviewedAt: null,
+      resubmission: !!resubmitting
     };
-    me.finalEdit = record;
-    persist();
-    const subs = loadSubmissions();
-    subs.push(record);
-    saveSubmissions(subs);
+    await Store.put("submissions", doc);
+    await refresh();
     burstConfetti(true);
     render("done");
   });
 }
 
-/* ----- done ----- */
+/* ---------------- done / status ---------------- */
 
 function viewDone() {
+  const sub = submissionOf(me.id, courseId);
+  const statusLine = !sub ? "" :
+    sub.status === "approved" ? `<p class="status-ok">✅ <b>Approved!</b> ${esc(sub.feedback || "Great work — you're fully onboarded.")}</p>` :
+    sub.status === "changes_requested" ? `<p class="status-warn">✎ <b>Changes requested:</b> ${esc(sub.feedback || "")}</p>` :
+    `<p class="status-wait">⏳ In review — your lead will give feedback only on your gaps.</p>`;
   app.innerHTML = `
     <div class="wrap" style="max-width:640px">
       <div class="done-box">
-        <div class="big">🎉</div>
-        <h1>Onboarding complete!</h1>
-        <p>Your Final Edit is submitted and your lead has been notified. They'll review it against the
-        checklist and give you feedback <b>only on your gaps</b> — then you're on the team for real.
-        Welcome to ${esc(COURSE.team)}, ${esc(me.name)}.</p>
-        <p style="font-size:13px">Submitted ${me.finalEdit ? fmtDate(me.finalEdit.at) : ""} &middot; <a href="${esc(me.finalEdit ? me.finalEdit.link : "#")}" target="_blank" rel="noopener">your reel ↗</a></p>
+        <div class="big">${sub && sub.status === "approved" ? "🎉" : "📨"}</div>
+        <h1>${sub && sub.status === "approved" ? "Onboarding complete!" : "Assignment submitted"}</h1>
+        ${statusLine}
+        <p style="font-size:13px">Submitted ${sub ? fmtDate(sub.at) : ""} · <a href="${esc(sub ? sub.link : "#")}" target="_blank" rel="noopener">your work ↗</a></p>
+        ${sub && sub.status === "changes_requested" ? `<button class="btn accent" id="resubBtn">Fix & resubmit</button>` : ""}
         <button class="btn primary" id="homeBtn">Back to modules</button>
       </div>
     </div>`;
   $("#homeBtn").addEventListener("click", () => render("home"));
+  const rb = $("#resubBtn");
+  if (rb) rb.addEventListener("click", () => render("assignment"));
 }
-
-/* ----- admin ----- */
-
-function viewAdmin() {
-  const all = Object.values(loadProfiles()).sort((a, b) => b.createdAt - a.createdAt);
-  const subs = loadSubmissions().slice().reverse();
-  const totalMods = COURSE.modules.length;
-
-  const rows = all.map(p => {
-    const modPill = p.passed.length === totalMods
-      ? `<span class="pill g">All ${totalMods} passed</span>`
-      : `<span class="pill o">${p.passed.length}/${totalMods}</span>`;
-    const fq = p.finalQuiz
-      ? (p.finalQuiz.score >= COURSE.finalQuiz.passScore
-        ? `<span class="pill g">${p.finalQuiz.score}/${p.finalQuiz.total}</span>`
-        : `<span class="pill r">${p.finalQuiz.score}/${p.finalQuiz.total}</span>`)
-      : `<span class="pill m">—</span>`;
-    const fe = p.finalEdit ? `<span class="pill g">Submitted</span>` : `<span class="pill m">—</span>`;
-    const gaps = p.wrongAnswers.length
-      ? `<span class="pill r">${p.wrongAnswers.length} wrong attempt${p.wrongAnswers.length > 1 ? "s" : ""}</span>`
-      : `<span class="pill g">Clean run</span>`;
-    return `<tr><td><b>${esc(p.name)}</b></td><td>${modPill}</td><td>${fq}</td><td>${fe}</td><td>${gaps}</td></tr>`;
-  }).join("");
-
-  // aggregate gaps: which questions get missed the most
-  const gapCounts = {};
-  all.forEach(p => p.wrongAnswers.forEach(w => {
-    const key = `${w.module}: ${w.question}`;
-    gapCounts[key] = (gapCounts[key] || 0) + 1;
-  }));
-  all.forEach(p => (p.finalQuiz ? p.finalQuiz.wrong : []).forEach(q => {
-    const key = `Final quiz: ${q}`;
-    gapCounts[key] = (gapCounts[key] || 0) + 1;
-  }));
-  const gapList = Object.entries(gapCounts).sort((a, b) => b[1] - a[1]).slice(0, 8)
-    .map(([k, n]) => `<div class="gap-item"><b>${n}×</b> — ${esc(k)}</div>`).join("");
-
-  const subRows = subs.map(s => `
-    <tr>
-      <td><b>${esc(s.name)}</b><br><span style="font-size:12px;color:var(--muted)">${fmtDate(s.at)}</span></td>
-      <td><a href="${esc(s.link)}" target="_blank" rel="noopener">Open reel ↗</a></td>
-      <td>${s.checklist.filter(Boolean).length}/${s.checklist.length} self-checked</td>
-      <td style="max-width:280px">${esc(s.notes || "—")}</td>
-    </tr>`).join("");
-
-  app.innerHTML = `
-    <div class="wrap">
-      <div class="mod-head">
-        <div class="crumb"><a id="backHome">← Back</a> &nbsp;/&nbsp; Leads view</div>
-        <h1>📊 Team progress</h1>
-        <p class="sub">Who has finished onboarding, where the gaps are, and every Final Edit submission — so feedback lands only where it's needed.</p>
-      </div>
-      <div class="admin-grid">
-        <div class="admin-card">
-          <h3>People (${all.length})</h3>
-          ${all.length ? `<table>
-            <tr><th>Name</th><th>Modules</th><th>Final quiz</th><th>Final edit</th><th>Quick-check gaps</th></tr>
-            ${rows}</table>` : `<div class="empty">Nobody has started onboarding on this machine yet.</div>`}
-        </div>
-        <div class="admin-card">
-          <h3>Most-missed questions</h3>
-          ${gapList || `<div class="empty">No wrong answers logged — either a perfect team or nobody has taken a quiz yet.</div>`}
-        </div>
-        <div class="admin-card">
-          <h3>Final Edit submissions (${subs.length})</h3>
-          ${subs.length ? `<table>
-            <tr><th>Who</th><th>Reel</th><th>Checklist</th><th>Notes</th></tr>
-            ${subRows}</table>` : `<div class="empty">No submissions yet.</div>`}
-        </div>
-      </div>
-    </div>`;
-  $("#backHome").addEventListener("click", () => render("home"));
-}
-
-/* ---------------- header wiring ---------------- */
-
-$("#adminBtn").addEventListener("click", () => render("admin"));
-$("#switchBtn").addEventListener("click", () => {
-  localStorage.removeItem(LS_CURRENT);
-  currentName = null;
-  me = null;
-  render("home");
-});
 
 /* ---------------- boot ---------------- */
 
-render("home");
+$("#adminBtn").addEventListener("click", () => requireLead(() => render("lead", "dashboard")));
+$("#switchBtn").addEventListener("click", () => {
+  me = null; courseId = null; leadUnlocked = false;
+  sessionStorage.removeItem("ac_person");
+  sessionStorage.removeItem("ac_course");
+  render("home");
+});
+
+(async function boot() {
+  if ((window.APP_CONFIG || {}).loadDemoSeed !== false) await loadSeedIfEmpty();
+  await refresh();
+  me = cache.people.find(p => p.id === sessionStorage.getItem("ac_person")) || null;
+  courseId = sessionStorage.getItem("ac_course") || null;
+  if (courseId && !courseById(courseId)) courseId = null;
+  render("home");
+})();
