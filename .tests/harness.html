@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Katta suite — test harness</title></head>
+<body>
+<h1>Test results</h1>
+<pre id="results">RUNNING</pre>
+<iframe id="frame" style="width:1200px;height:800px"></iframe>
+<script>
+const results = [];
+function report(name, ok, extra) {
+  results.push((ok ? "PASS" : "FAIL") + " — " + name + (extra ? " (" + extra + ")" : ""));
+}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function loadFrame(url) {
+  return new Promise(resolve => {
+    const f = document.getElementById("frame");
+    f.onload = () => resolve(f.contentWindow);
+    f.src = url;
+  });
+}
+
+async function testVM() {
+  // fresh state
+  localStorage.removeItem("vmob_profiles");
+  localStorage.removeItem("vmob_current");
+  localStorage.removeItem("vmob_submissions");
+  const w = await loadFrame("../vm-onboarding/index.html");
+  await sleep(300);
+  const d = w.document;
+  try {
+    report("VM: login screen shows", !!d.querySelector("#nameInput"));
+    d.querySelector("#nameInput").value = "Harness Tester";
+    d.querySelector("#startBtn").click();
+    await sleep(200);
+    const cards = d.querySelectorAll(".mod-card[data-mod]");
+    report("VM: 8 module cards render", cards.length === 8, cards.length + " cards");
+    report("VM: module 1 available", cards[0].dataset.state === "available");
+    report("VM: module 2 locked", cards[1].dataset.state === "locked");
+    cards[0].click();
+    await sleep(200);
+    report("VM: module view opens with quiz", !!d.querySelector(".quiz"));
+    // wrong answer first (index 0 is wrong for module 1; correct is 2)
+    d.querySelector('.opt[data-i="0"]').click();
+    await sleep(100);
+    report("VM: wrong answer marked", d.querySelector('.opt[data-i="0"]').classList.contains("wrong"));
+    d.querySelector('.opt[data-i="2"]').click();
+    await sleep(100);
+    report("VM: correct answer accepted", d.querySelector('.opt[data-i="2"]').classList.contains("right"));
+    const prof = JSON.parse(localStorage.getItem("vmob_profiles"))["Harness Tester"];
+    report("VM: pass persisted to profile", prof && prof.passed.includes("welcome"));
+    report("VM: wrong attempt logged as gap", prof && prof.wrongAnswers.length === 1);
+    d.querySelector("#nextBtn").click();
+    await sleep(200);
+    report("VM: next module opened after pass", d.body.textContent.includes("Pacing"));
+  } catch (e) { report("VM: exception", false, e.message); }
+  // cleanup
+  localStorage.removeItem("vmob_profiles");
+  localStorage.removeItem("vmob_current");
+  localStorage.removeItem("vmob_submissions");
+}
+
+async function testGear() {
+  localStorage.removeItem("gearwall_state_v1");
+  const w = await loadFrame("../gear-wall/index.html");
+  await sleep(400);
+  const d = w.document;
+  try {
+    report("Gear: wall renders 16 items", d.querySelectorAll(".gear-card").length === 16, d.querySelectorAll(".gear-card").length + " cards");
+    report("Gear: QR codes generated", d.querySelectorAll(".gear-card .qr svg").length === 16);
+    report("Gear: damaged item badged", !!d.querySelector(".badge.damaged"));
+    // calendar renders
+    w.setTab("calendar");
+    await sleep(200);
+    report("Gear: calendar renders cells", d.querySelectorAll(".cal-cell").length >= 28);
+    report("Gear: seeded pending shoot visible", d.body.textContent.includes("VM shoot one"));
+    // scanner flow: GW-CAM-001 is in an approved shoot today
+    w.setTab("scanner");
+    await sleep(200);
+    w.handleCode("gearwall:GW-CAM-001");
+    await sleep(100);
+    let st = JSON.parse(localStorage.getItem("gearwall_state_v1"));
+    report("Gear: scan picks up booked gear", st.gear.find(g => g.id === "GW-CAM-001").status === "in_use");
+    report("Gear: pickup result shown", !!d.querySelector(".scan-result.ok"));
+    w.handleCode("GW-CAM-001"); // second scan = return (also tests raw id without prefix)
+    await sleep(100);
+    st = JSON.parse(localStorage.getItem("gearwall_state_v1"));
+    const sh = st.shoots.find(s => s.pickups["GW-CAM-001"]);
+    report("Gear: second scan returns gear", st.gear.find(g => g.id === "GW-CAM-001").status === "available");
+    report("Gear: usage duration recorded", sh && sh.pickups["GW-CAM-001"].returnedAt > 0);
+    // unapproved booking blocked: GW-CAM-002 is only in the pending shoot
+    w.handleCode("GW-CAM-002");
+    await sleep(100);
+    st = JSON.parse(localStorage.getItem("gearwall_state_v1"));
+    report("Gear: pending shoot cannot pick up", st.gear.find(g => g.id === "GW-CAM-002").status === "available");
+    report("Gear: warning shown for pending", !!d.querySelector(".scan-result.warn"));
+    // unknown code
+    w.handleCode("gearwall:NOPE-000");
+    await sleep(100);
+    report("Gear: unknown code rejected", !!d.querySelector(".scan-result.err"));
+    // admin approve flow
+    st = JSON.parse(localStorage.getItem("gearwall_state_v1"));
+    report("Gear: activity log populated", st.log.length >= 3);
+  } catch (e) { report("Gear: exception", false, e.message); }
+  localStorage.removeItem("gearwall_state_v1");
+}
+
+async function testKatta() {
+  localStorage.removeItem("katta_history_v1");
+  const w = await loadFrame("../katta-knowledge/index.html");
+  await sleep(300);
+  const d = w.document;
+  try {
+    report("Katta: chips render", d.querySelectorAll("#chips .chip").length === 8);
+    // engine unit tests
+    const r1 = w.search("What is GTO?");
+    report("Katta: GTO retrieves poker episode @14:32", r1.best && r1.best.ep.id === "katta-01" && r1.best.seg.t === "14:32");
+    const r2 = w.search("what makes a good hire");
+    report("Katta: hiring question retrieves S02", r2.best && r2.best.ep.id === "katta-02");
+    const r3 = w.search("how do we reduce coordination costs");
+    report("Katta: coordination costs retrieves S03", r3.best && r3.best.ep.id === "katta-03");
+    const r4 = w.search("completely unrelated quantum jellyfish recipe");
+    report("Katta: nonsense query returns no match", !r4.best);
+    // full ask flow (thinking delay ~0.9-1.6s, then typewriter)
+    w.ask("What is GTO?");
+    await sleep(2200);
+    report("Katta: answer card appears", !!d.querySelector(".answer-card"));
+    await sleep(3000);
+    const txt = d.querySelector(".answer-text");
+    report("Katta: typewriter produced text", txt && txt.textContent.length > 80, (txt ? txt.textContent.length : 0) + " chars");
+    report("Katta: source card cites timestamp", !!d.querySelector(".ts-chip") && d.body.textContent.includes("14:32"));
+    report("Katta: hover preview exists", !!d.querySelector(".source-card .preview"));
+    const hist = JSON.parse(localStorage.getItem("katta_history_v1") || "[]");
+    report("Katta: history persisted", hist.length === 1 && hist[0].q === "What is GTO?");
+  } catch (e) { report("Katta: exception", false, e.message); }
+  localStorage.removeItem("katta_history_v1");
+}
+
+(async () => {
+  await testVM();
+  await testGear();
+  await testKatta();
+  const fails = results.filter(r => r.startsWith("FAIL")).length;
+  results.push("");
+  results.push(fails === 0 ? "ALL TESTS PASSED (" + results.length + " checks)" : fails + " FAILURES");
+  document.getElementById("results").textContent = results.join("\n");
+  document.title = fails === 0 ? "TESTS-OK" : "TESTS-FAILED";
+})();
+</script>
+</body>
+</html>

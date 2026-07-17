@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Katta Knowledge Interface</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🏮</text></svg>">
+</head>
+<body>
+  <header>
+    <div>
+      <div class="logo">The <em>Katta</em> Knowledge Interface</div>
+      <div class="logo-sub">Every session · indexed · timestamped</div>
+    </div>
+    <div class="spacer"></div>
+    <button class="icon-btn" id="libBtn" title="Episode library">🗂</button>
+    <button class="icon-btn" id="soundBtn" title="Sound">🔊</button>
+  </header>
+
+  <main class="stage">
+    <div class="ask-head">
+      <div class="ornament">✦ ✦ ✦</div>
+      <h1>Ask anything the <em>Katta</em> has answered</h1>
+      <p>The Katta sessions are our internal fireside talks for the management team.<br>
+      Too lazy to rewatch an hour of video? Ask here — you'll get the answer, the episode, and the exact timestamp.</p>
+    </div>
+
+    <div class="ask-box">
+      <input id="askInput" placeholder="e.g. What is GTO?" autocomplete="off" maxlength="140">
+      <button class="ask-btn" id="askBtn">Ask</button>
+    </div>
+    <div class="chips" id="chips"></div>
+
+    <div class="answer-zone" id="answerZone"></div>
+    <div class="history" id="history"></div>
+  </main>
+
+  <footer>
+    Answers are retrieved locally from the indexed session knowledge base — no keys, no network.<br>
+    In production, swap the retrieval engine for embeddings + an LLM and point the sources at the real recordings.
+  </footer>
+
+  <script src="knowledge.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
