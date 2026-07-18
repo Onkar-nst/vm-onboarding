@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>portfolio shot</title>
+<style>
+  html,body{margin:0;padding:0;background:#000;overflow:hidden}
+  iframe{width:1300px;height:820px;border:0;display:block}
+</style></head>
+<body>
+<iframe id="f" src="../portfolio/index.html?nopreload"></iframe>
+<script>
+  // ?y=3200        → scroll to a pixel offset
+  // ?sel=.education → scroll that element to the top of the frame
+  // ?off=200        → extra offset applied after sel
+  const q = new URLSearchParams(location.search);
+  const y = Number(q.get('y') || 0);
+  const sel = q.get('sel');
+  const off = Number(q.get('off') || 0);
+  const f = document.getElementById('f');
+  f.onload = () => {
+    const w = f.contentWindow;
+    setTimeout(() => {
+      w.document.documentElement.style.scrollBehavior = 'auto';
+      let target = y;
+      if (sel) {
+        const el = w.document.querySelector(sel);
+        if (el) target = el.getBoundingClientRect().top + w.scrollY + off;
+      }
+      w.scrollTo(0, target);
+      w.dispatchEvent(new w.Event('scroll'));
+      // Headless starves animation frames, so CSS transitions never advance.
+      // Force the revealed end-state so the screenshot shows real layout.
+      const s = w.document.createElement('style');
+      s.textContent = '.reveal{opacity:1!important;transform:none!important;transition:none!important}';
+      w.document.head.appendChild(s);
+      setTimeout(() => {
+        document.title = 'AT-' + Math.round(w.scrollY) + '-OF-' + w.document.body.scrollHeight;
+      }, 900);
+    }, 900);
+  };
+</script>
+</body></html>

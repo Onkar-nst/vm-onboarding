@@ -1,0 +1,22 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8"><title>probe</title></head><body>
+<iframe id="f" src="../portfolio/index.html?nopreload" style="width:1300px;height:820px;border:0"></iframe>
+<script>
+const f = document.getElementById('f');
+f.onload = () => {
+  const w = f.contentWindow, d = w.document;
+  setTimeout(() => {
+    d.documentElement.style.scrollBehavior='auto';
+    const pg = d.querySelector('#playground');
+    w.scrollTo(0, pg.getBoundingClientRect().top + w.scrollY - 40);
+    const before = d.querySelectorAll('.reveal.in').length;
+    w.dispatchEvent(new w.Event('scroll'));      // force the handler
+    const after = d.querySelectorAll('.reveal.in').length;
+    setTimeout(() => {
+      const h = d.querySelector('.pg-head');
+      document.title = 'scrollY=' + Math.round(w.scrollY) +
+        ' before=' + before + ' afterDispatch=' + after +
+        ' op=' + getComputedStyle(h).opacity;
+    }, 1500);
+  }, 800);
+};
+</script></body></html>

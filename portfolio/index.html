@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Onkar Dange — Full-Stack Developer</title>
+<meta name="description" content="Full-Stack Developer building scalable, responsive web and mobile products.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Antonio:wght@400;500;600;700&family=Geist+Mono:wght@400;500&family=Geist:wght@300;400;500;600;700&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>⚡</text></svg>">
+</head>
+<body>
+
+<!-- ══════════ PRELOADER ══════════ -->
+<div class="preloader" id="preloader">
+  <div class="pre-inner">
+    <div class="pre-title">
+      <span>BRINGING</span>
+      <span>IDEAS TO LIFE</span>
+    </div>
+    <div class="pre-emoji">🚀</div>
+  </div>
+  <div class="pre-bar"><div class="pre-bar-fill" id="preBar"></div></div>
+</div>
+
+<!-- ══════════ CUSTOM CURSOR ══════════ -->
+<div class="cursor-dot" id="cursorDot"></div>
+<div class="cursor-ring" id="cursorRing"></div>
+
+<!-- ══════════ NAV ══════════ -->
+<nav class="nav" id="nav">
+  <div class="nav-pill">
+    <div class="nav-group nav-left">
+      <a href="#about" class="nav-link"><span class="nav-swap"><span class="a">About</span><span class="b">About</span></span></a>
+      <a href="#work" class="nav-link"><span class="nav-swap"><span class="a">Work</span><span class="b">Work</span></span></a>
+      <a href="#playground" class="nav-link"><span class="nav-swap"><span class="a">Playground</span><span class="b">Playground</span></span></a>
+    </div>
+    <a href="#hero" class="nav-logo" aria-label="Home"><span>O</span></a>
+    <div class="nav-group nav-right">
+      <a href="#services" class="nav-link"><span class="nav-swap"><span class="a">Services</span><span class="b">Services</span></span></a>
+      <a href="#footer" class="nav-link"><span class="nav-swap"><span class="a">Contact</span><span class="b">Contact</span></span></a>
+      <a href="#" class="nav-resume" id="resumeLink">
+        <span class="res-a">Resume</span>
+        <span class="res-b">Resume</span>
+      </a>
+    </div>
+    <button class="nav-burger" id="navBurger" aria-label="Menu"><span></span><span></span></button>
+  </div>
+</nav>
+
+<div class="mobile-menu" id="mobileMenu">
+  <a href="#about">About</a>
+  <a href="#work">Work</a>
+  <a href="#playground">Playground</a>
+  <a href="#services">Services</a>
+  <a href="#footer">Contact</a>
+  <a href="#" id="resumeLinkMobile">Resume</a>
+</div>
+
+<main id="main">
+
+<!-- ══════════ HERO ══════════ -->
+<section id="hero" class="hero">
+  <div class="hero-greeting"><span>Hello, I'm</span></div>
+
+  <h1 class="hero-title">
+    <span class="ht-line" data-split>Onkar</span>
+    <span class="ht-line" data-split>Dange</span>
+  </h1>
+
+  <div class="hero-stage">
+    <div class="fan" id="fan">
+      <!-- cards injected by JS -->
+    </div>
+  </div>
+
+  <div class="hero-bottom">
+    <h5 class="hero-sub">Full-Stack Developer building scalable, responsive applications with React, Node.js, and modern tooling.</h5>
+    <div class="hero-cta">
+      <a href="#footer" class="btn-connect magnetic">
+        <span class="bc-label">Let's Connect</span>
+        <span class="bc-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M17 7H8M17 7v9"/></svg>
+        </span>
+      </a>
+      <div class="status-pill">
+        <span class="status-dot"><i class="ping"></i><i class="core"></i></span>
+        <span class="status-text">Available for work</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="scroll-hint"><span>scroll</span><i></i></div>
+</section>
+
+<!-- ══════════ BIO / ABOUT ══════════ -->
+<section id="about" class="bio">
+  <h2 class="sr-only">Introduction</h2>
+  <p class="bio-text" id="bioText">Full-Stack Developer experienced in building scalable, responsive applications across web and mobile; shipped production projects with strong frontend-backend integration and clean architecture; focused on performance, maintainable code, thoughtful interfaces, and continuous learning.</p>
+</section>
+
+<!-- ══════════ WORK (sticky stacking cards) ══════════ -->
+<section id="work" class="work">
+  <div class="work-intro">
+    <p class="kicker">Selected Work</p>
+    <h2 class="section-heading">Things I've built</h2>
+  </div>
+
+  <div class="work-stack" id="workStack">
+
+    <div class="work-panel">
+      <article class="work-card" data-idx="0">
+        <div class="wc-left">
+          <div class="wc-top">
+            <div class="wc-meta"><span>2025</span><span>•</span><span>Full Stack</span></div>
+            <h3 class="wc-title">Aurora</h3>
+            <p class="wc-desc">A collaboration platform for teams with real-time messaging and role-based access control.</p>
+          </div>
+          <div class="wc-actions">
+            <a href="#" class="btn-solid">Live Demo</a>
+            <a href="#" class="btn-outline">GitHub</a>
+          </div>
+        </div>
+        <div class="wc-right"><div class="wc-shot" data-shot="1"><span class="shot-label">Aurora</span></div></div>
+      </article>
+    </div>
+
+    <div class="work-panel">
+      <article class="work-card" data-idx="1">
+        <div class="wc-left">
+          <div class="wc-top">
+            <div class="wc-meta"><span>2025</span><span>•</span><span>Mobile App</span></div>
+            <h3 class="wc-title">Voyage</h3>
+            <p class="wc-desc">Trip planning app with itinerary building, offline maps, and shared travel boards.</p>
+          </div>
+          <div class="wc-actions">
+            <a href="#" class="btn-solid">Live Demo</a>
+            <a href="#" class="btn-outline">GitHub</a>
+          </div>
+        </div>
+        <div class="wc-right"><div class="wc-shot" data-shot="2"><span class="shot-label">Voyage</span></div></div>
+      </article>
+    </div>
+
+    <div class="work-panel">
+      <article class="work-card" data-idx="2">
+        <div class="wc-left">
+          <div class="wc-top">
+            <div class="wc-meta"><span>2025</span><span>•</span><span>Web App</span></div>
+            <h3 class="wc-title">Pulse</h3>
+            <p class="wc-desc">Real-time analytics dashboard with live data streams and customisable reporting.</p>
+          </div>
+          <div class="wc-actions">
+            <a href="#" class="btn-solid">Live Demo</a>
+            <a href="#" class="btn-outline">GitHub</a>
+          </div>
+        </div>
+        <div class="wc-right"><div class="wc-shot" data-shot="3"><span class="shot-label">Pulse</span></div></div>
+      </article>
+    </div>
+
+    <div class="work-panel">
+      <article class="work-card" data-idx="3">
+        <div class="wc-left">
+          <div class="wc-top">
+            <div class="wc-meta"><span>2024</span><span>•</span><span>Product Design</span></div>
+            <h3 class="wc-title">Marketly</h3>
+            <p class="wc-desc">An end-to-end commerce experience for listing, discovering, and buying products.</p>
+          </div>
+          <div class="wc-actions">
+            <a href="#" class="btn-solid">Live Demo</a>
+            <a href="#" class="btn-outline">GitHub</a>
+          </div>
+        </div>
+        <div class="wc-right"><div class="wc-shot" data-shot="4"><span class="shot-label">Marketly</span></div></div>
+      </article>
+    </div>
+
+    <div class="work-panel">
+      <article class="work-card" data-idx="4">
+        <div class="wc-left">
+          <div class="wc-top">
+            <div class="wc-meta"><span>2024</span><span>•</span><span>Mobile App</span></div>
+            <h3 class="wc-title">Reelist</h3>
+            <p class="wc-desc">A watchlist app for films and shows with taste-based recommendations.</p>
+          </div>
+          <div class="wc-actions">
+            <a href="#" class="btn-solid">Live Demo</a>
+            <a href="#" class="btn-outline">GitHub</a>
+          </div>
+        </div>
+        <div class="wc-right"><div class="wc-shot" data-shot="5"><span class="shot-label">Reelist</span></div></div>
+      </article>
+    </div>
+
+    <div class="work-panel">
+      <article class="work-card" data-idx="5">
+        <div class="wc-left">
+          <div class="wc-top">
+            <div class="wc-meta"><span>2023</span><span>•</span><span>Full Stack</span></div>
+            <h3 class="wc-title">Handy</h3>
+            <p class="wc-desc">Scheduling platform connecting households with trusted local professionals.</p>
+          </div>
+          <div class="wc-actions">
+            <a href="#" class="btn-solid">Live Demo</a>
+            <a href="#" class="btn-outline">GitHub</a>
+          </div>
+        </div>
+        <div class="wc-right"><div class="wc-shot" data-shot="6"><span class="shot-label">Handy</span></div></div>
+      </article>
+    </div>
+
+  </div>
+</section>
+
+<!-- ══════════ SERVICES ══════════ -->
+<section id="services" class="services">
+  <div class="container">
+    <div class="services-head">
+      <p class="kicker dark">Where I Can Help</p>
+      <h2 class="section-heading dark">From first idea to final ship</h2>
+      <p class="services-sub">…and every messy, interesting bit in between.</p>
+    </div>
+
+    <div class="service-list">
+      <div class="service-row">
+        <div class="sr-left">
+          <h3 class="sr-title">Frontend Development</h3>
+          <p class="sr-tech">React · Next.js · Tailwind CSS · TypeScript · JavaScript · Redux · Responsive Design</p>
+        </div>
+        <div class="sr-icon">◈</div>
+      </div>
+      <div class="service-row">
+        <div class="sr-left">
+          <h3 class="sr-title">Backend Development</h3>
+          <p class="sr-tech">Node.js · Express · MongoDB · PostgreSQL · Prisma · Python · REST APIs · JWT Auth</p>
+        </div>
+        <div class="sr-icon">◉</div>
+      </div>
+      <div class="service-row">
+        <div class="sr-left">
+          <h3 class="sr-title">Mobile Development</h3>
+          <p class="sr-tech">React Native · Expo · iOS &amp; Android · Cross-platform Development</p>
+        </div>
+        <div class="sr-icon">▣</div>
+      </div>
+      <div class="service-row">
+        <div class="sr-left">
+          <h3 class="sr-title">Tools &amp; Cloud</h3>
+          <p class="sr-tech">Git · GitHub · AWS · Docker · Vercel · Postman · CI/CD</p>
+        </div>
+        <div class="sr-icon">⬡</div>
+      </div>
+      <div class="service-row">
+        <div class="sr-left">
+          <h3 class="sr-title">Design</h3>
+          <p class="sr-tech">Figma · UI/UX · Design Systems · Prototyping · Motion</p>
+        </div>
+        <div class="sr-icon">✦</div>
+      </div>
+      <div class="service-row">
+        <div class="sr-left">
+          <h3 class="sr-title">Soft Skills</h3>
+          <p class="sr-tech">Creativity · Critical Thinking · Communication · Problem Solving · Teamwork</p>
+        </div>
+        <div class="sr-icon">◐</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ EDUCATION ══════════ -->
+<section class="education">
+  <div class="container">
+    <div class="edu-head reveal">
+      <h2 class="edu-title">Education<br><span>&amp; Certifications</span></h2>
+    </div>
+
+    <div class="edu-grid">
+      <div class="edu-col reveal">
+        <h3 class="edu-colhead">Academic Background</h3>
+
+        <div class="edu-item">
+          <span class="edu-year">2022 — 2026</span>
+          <h4 class="edu-school">Your University Name</h4>
+          <p class="edu-degree">Bachelor of Technology (Computer Science)</p>
+          <p class="edu-grade">Grade: —</p>
+        </div>
+
+        <div class="edu-item">
+          <span class="edu-year">2021 — 2022</span>
+          <h4 class="edu-school">Your Higher Secondary School</h4>
+          <p class="edu-degree">Intermediate (Class XII)</p>
+          <p class="edu-grade">Grade: —</p>
+        </div>
+
+        <div class="edu-item">
+          <span class="edu-year">2019 — 2020</span>
+          <h4 class="edu-school">Your School</h4>
+          <p class="edu-degree">Matriculation (Class X)</p>
+          <p class="edu-grade">Grade: —</p>
+        </div>
+      </div>
+
+      <div class="edu-col reveal">
+        <h3 class="edu-colhead">Certifications &amp; Activities</h3>
+
+        <div class="cert-card">
+          <div class="cert-top">
+            <h4 class="cert-title">Certification Name</h4>
+            <span class="cert-tag">Issuer</span>
+          </div>
+          <p class="cert-desc">A short line about what you learned or built during this programme.</p>
+          <span class="cert-date">Month Year</span>
+        </div>
+
+        <div class="cert-card">
+          <div class="cert-top">
+            <h4 class="cert-title">Another Certification</h4>
+            <span class="cert-tag">Issuer</span>
+          </div>
+          <p class="cert-desc">A short line about the skills this one covered.</p>
+          <span class="cert-date">Month Year</span>
+        </div>
+
+        <div class="extra">
+          <h4 class="extra-head">Extra-Curricular</h4>
+          <ul class="extra-list">
+            <li><span class="dot"></span><span><strong>Design:</strong> UI/UX and graphics for campus events, clubs, and web platforms.</span></li>
+            <li><span class="dot"></span><span><strong>Community:</strong> Active contributor to student tech and entrepreneurship initiatives.</span></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ PLAYGROUND ══════════ -->
+<section class="playground-wrap">
+  <div id="playground" class="playground container">
+    <div class="pg-head reveal">
+      <p class="kicker">Creative Lab</p>
+      <h2 class="pg-title">After Hours</h2>
+      <p class="pg-sub">Experiments, doodles, and things built purely for fun.</p>
+    </div>
+
+    <div class="marquee-wrap">
+      <div class="fade-l"></div>
+      <div class="fade-r"></div>
+      <div class="marquee" id="marquee">
+        <div class="marquee-track" id="marqueeTrack"><!-- posters injected by JS --></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════ ARCHIVE (draggable stack) ══════════ -->
+  <div class="archive container">
+    <div class="arch-head reveal">
+      <h2 class="arch-title">The Archive</h2>
+      <p class="arch-sub">Older work, shelved experiments, and where it all started. Drag a card to flick through.</p>
+    </div>
+
+    <div class="arch-stage">
+      <div class="arch-stack" id="archStack"><!-- cards injected by JS --></div>
+      <div class="arch-hint" id="archHint">drag&nbsp;→</div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ FOOTER ══════════ -->
+<footer id="footer" class="footer">
+  <div class="container">
+    <p class="foot-pre reveal">That's a wrap? Maybe not.</p>
+    <h2 class="foot-title reveal">Let's build<br>something good 👋</h2>
+    <p class="foot-tag reveal">
+      Open to 💬 conversations, 🤝 collaborations, 🧠 hard problems,<br>
+      🧩 side quests — or just a good cup of ☕ coffee.
+    </p>
+    <p class="foot-phone reveal">📞 +91 XXXXX XXXXX</p>
+
+    <a href="mailto:onkardange15@gmail.com" class="btn-meet magnetic reveal">
+      <span>Let's Meet</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M17 7H8M17 7v9"/></svg>
+    </a>
+
+    <p class="foot-or reveal">or connect through…</p>
+    <div class="socials reveal">
+      <a href="#" class="social">LinkedIn</a>
+      <a href="mailto:onkardange15@gmail.com" class="social">Email</a>
+      <a href="#" class="social">Instagram</a>
+      <a href="https://github.com/Onkar-nst" class="social" target="_blank" rel="noopener">GitHub</a>
+    </div>
+
+    <div class="foot-bottom">
+      <p class="foot-copy">Built with 🤯 curiosity, ☕ too much coffee, and 💻 far too many open tabs. Thanks for scrolling — go drink some water.</p>
+      <a href="#hero" class="back-top">Back to top ↑</a>
+    </div>
+  </div>
+</footer>
+
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
