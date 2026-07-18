@@ -232,10 +232,181 @@ async function testKatta() {
   localStorage.removeItem("katta_history_v1");
 }
 
+/* ================= Admissions CRM ================= */
+async function testCrm() {
+  wipe("crm_v2");
+  sessionStorage.removeItem("crm_user");
+  let w = await loadFrame("../CRM/index.html");
+  await sleep(1400); // async boot + seeding a full demo season
+  let d = w.document;
+  const ls = () => JSON.parse(localStorage.getItem("crm_v2:leads") || "[]");
+  const tasks = () => JSON.parse(localStorage.getItem("crm_v2:tasks") || "[]");
+  try {
+    // ---- boot & seed ----
+    report("CRM: demo season seeds 46 leads", ls().length === 46, ls().length + " leads");
+    report("CRM: dashboard renders 6 stat cards", d.querySelectorAll(".stat").length === 6, d.querySelectorAll(".stat").length + " stats");
+    report("CRM: funnel + leaderboard render", d.body.textContent.includes("Admission funnel") && d.body.textContent.includes("Counsellor leaderboard"));
+
+    // ---- new enquiry with auto-assignment ----
+    d.querySelector("#dNew").click(); await sleep(250);
+    d.querySelector("#lName").value = "Harness Student";
+    d.querySelector("#lPhone").value = "9899000001";
+    d.querySelector("#lCity").value = "Pune";
+    d.querySelector("#lSave").click(); await sleep(800);
+    const created = ls().find(l => l.name === "Harness Student");
+    report("CRM: new enquiry created + auto-assigned", !!created && !!created.ownerId && created.stage === "new", created && created.id + " → " + created.ownerId);
+    report("CRM: 360 drawer opens after create", !!d.querySelector("#drawer"));
+    d.querySelector("#dClose").click(); await sleep(150);
+
+    // ---- duplicate detection ----
+    d.querySelector("#dNew").click(); await sleep(200);
+    d.querySelector("#lPhone").value = "9899000001";
+    d.querySelector("#lPhone").dispatchEvent(new w.Event("blur")); await sleep(150);
+    report("CRM: duplicate phone flagged before save", (d.querySelector("#dupWarn").textContent || "").includes("duplicate"));
+    d.querySelector(".modal [data-close]").click(); await sleep(150);
+
+    // ---- pipeline board ----
+    d.querySelector('[data-tab="pipeline"]').click(); await sleep(400);
+    report("CRM: board renders all 9 stage columns", d.querySelectorAll(".col").length === 9, d.querySelectorAll(".col").length + " cols");
+    report("CRM: lead cards on board", d.querySelectorAll(".lead-card").length >= 40, d.querySelectorAll(".lead-card").length + " cards");
+
+    // ---- stage move via drawer ----
+    d.querySelector('[data-card="LD-036"]').click(); await sleep(300);
+    d.querySelector("#aStage").click(); await sleep(200);
+    d.querySelector('[data-st="contacted"]').click(); await sleep(600);
+    report("CRM: stage move persists via Store", ls().find(l => l.id === "LD-036").stage === "contacted");
+    d.querySelector("#dClose").click(); await sleep(150);
+
+    // ---- mark lost captures reason + death stage, closes tasks ----
+    d.querySelector('[data-card="LD-031"]').click(); await sleep(300);
+    d.querySelector("#aStage").click(); await sleep(200);
+    d.querySelector('[data-st="lost"]').click(); await sleep(250);
+    report("CRM: marking lost demands a reason", !!d.querySelector("#lostR"));
+    d.querySelector("#lostGo").click(); await sleep(600);
+    const lostLead = ls().find(l => l.id === "LD-031");
+    report("CRM: lost reason + death stage recorded", lostLead.stage === "lost" && !!lostLead.lostReason && lostLead.lastStageOrder === 2, lostLead.lostReason);
+    report("CRM: open follow-ups auto-closed on loss", tasks().filter(t => t.leadId === "LD-031" && !t.done).length === 0);
+    d.querySelector("#dClose").click(); await sleep(150);
+
+    // ---- enrolment flow ----
+    d.querySelector('[data-card="LD-009"]').click(); await sleep(300);
+    d.querySelector("#aStage").click(); await sleep(200);
+    d.querySelector('[data-st="enrolled"]').click(); await sleep(300);
+    report("CRM: enrol modal shows fee position", d.body.textContent.includes("Outstanding"));
+    d.querySelector("#enrolGo").click(); await sleep(600);
+    const enr = ls().find(l => l.id === "LD-009");
+    report("CRM: enrolment confirmed with timestamp", enr.stage === "enrolled" && !!enr.enrolledAt);
+    d.querySelector("#dClose").click(); await sleep(150);
+
+    // ---- document verification cycle ----
+    d.querySelector('[data-card="LD-013"]').click(); await sleep(300);
+    d.querySelector('[data-dtab="documents"]').click(); await sleep(250);
+    report("CRM: seeded doc shows received state", d.querySelector(".doc-state").classList.contains("recv"));
+    d.querySelector(".doc-state").click(); await sleep(500);
+    const kian = ls().find(l => l.id === "LD-013");
+    report("CRM: doc verify cycle persists", kian.docs["10th Marksheet"] && kian.docs["10th Marksheet"].verified === true);
+
+    // ---- record payment with receipt ----
+    d.querySelector('[data-dtab="payments"]').click(); await sleep(250);
+    d.querySelector("#payAdd").click(); await sleep(200);
+    d.querySelector("#pGo").click(); await sleep(500);
+    const pays = JSON.parse(localStorage.getItem("crm_v2:payments") || "[]");
+    const receipts = pays.filter(p => p.receiptNo).map(p => p.receiptNo);
+    report("CRM: payment recorded, receipts stay unique", pays.filter(p => p.leadId === "LD-013" && p.status === "paid").length === 2 && new Set(receipts).size === receipts.length, receipts.length + " receipts");
+
+    // ---- follow-up task from drawer ----
+    d.querySelector("#aTask").click(); await sleep(200);
+    d.querySelector("#tGo").click(); await sleep(400);
+    report("CRM: follow-up scheduled from drawer", tasks().some(t => t.leadId === "LD-013" && !t.done && t.title === "Follow-up call"));
+    d.querySelector("#dClose").click(); await sleep(150);
+
+    // ---- My Day work queue ----
+    d.querySelector('[data-tab="myday"]').click(); await sleep(400);
+    report("CRM: My Day lists follow-ups", d.querySelectorAll(".task-row").length >= 5, d.querySelectorAll(".task-row").length + " rows");
+    const tickBtn = d.querySelector(".task-row .tick[data-done]");
+    const tid = tickBtn.dataset.done;
+    tickBtn.click(); await sleep(500);
+    report("CRM: ticking a follow-up closes it", tasks().find(t => t.id === tid).done === true);
+
+    // ---- template merge fields ----
+    const merged = w.applyTemplate("Hi {{firstname}}, {{course}} costs {{fee}}", w.leadById("LD-001"));
+    report("CRM: merge fields resolve with Indian grouping", merged.includes("Aarav") && merged.includes("Computer Science") && merged.includes("1,85,000"), merged);
+
+    // ---- admin PIN gate ----
+    report("CRM: manage hidden while locked", d.querySelector("#manageTabBtn").style.display === "none");
+    d.querySelector('[data-tab="manage"]').click(); await sleep(250);
+    d.querySelector("#pinInput").value = "9999";
+    d.querySelector("#pinGo").click(); await sleep(250);
+    report("CRM: wrong PIN rejected", !!d.querySelector("#pinInput") && d.querySelector("#manageTabBtn").style.display === "none");
+    d.querySelector("#pinInput").value = "1234";
+    d.querySelector("#pinGo").click(); await sleep(500);
+    report("CRM: correct PIN unlocks Manage", d.body.textContent.includes("Programmes") && d.querySelector("#manageTabBtn").style.display !== "none");
+
+    // ---- CSV import ----
+    d.querySelector('[data-mt="import"]').click(); await sleep(250);
+    d.querySelector("#impSample").click(); await sleep(150);
+    d.querySelector("#impPreview").click(); await sleep(250);
+    report("CRM: import preview marks rows new", d.querySelectorAll(".tag.cold").length === 3);
+    const beforeImp = ls().length;
+    d.querySelector("#impGo").click(); await sleep(900);
+    report("CRM: CSV import adds 3 tagged leads", ls().length === beforeImp + 3 && ls().filter(l => (l.tags || []).includes("imported")).length === 3);
+
+    // ---- settings persist ----
+    d.querySelector('[data-tab="settings"]').click(); await sleep(400);
+    d.querySelector("#sSla").value = "30";
+    d.querySelector("#setSave").click(); await sleep(400);
+    const st = JSON.parse(localStorage.getItem("crm_v2:settings") || "[]").find(s => s.id === "settings");
+    report("CRM: settings persist via Store", st.firstResponseSlaMins === 30);
+
+    // ---- reports ----
+    d.querySelector('[data-tab="reports"]').click(); await sleep(400);
+    report("CRM: reports render ROI + loss analysis", d.body.textContent.includes("Source performance") && d.body.textContent.includes("Why we lose"));
+    report("CRM: stage conversion table renders", d.body.textContent.includes("Stage-to-stage conversion"));
+
+    // ---- event desk capture ----
+    d.querySelector('[data-tab="events"]').click(); await sleep(400);
+    d.querySelector("[data-ecap]").click(); await sleep(250);
+    d.querySelector("#ecName").value = "Fair Walkin";
+    d.querySelector("#ecPhone").value = "9899000077";
+    d.querySelector("#ecGo").click(); await sleep(700);
+    const evLead = ls().find(l => l.name === "Fair Walkin");
+    report("CRM: event desk capture creates tagged lead", !!evLead && !!evLead.eventId && (evLead.tags || []).includes("event"));
+    const evs = JSON.parse(localStorage.getItem("crm_v2:events") || "[]");
+    report("CRM: event attendance incremented", evLead && evs.find(e => e.id === evLead.eventId).attended === 1);
+    d.querySelector(".modal [data-close]").click(); await sleep(150);
+
+    // ---- outreach templates ----
+    d.querySelector('[data-tab="outreach"]').click(); await sleep(300);
+    report("CRM: 6 seeded templates render", d.querySelectorAll("[data-tedit]").length === 6);
+
+    // ---- public enquiry form ----
+    w = await loadFrame("../CRM/enquiry.html"); await sleep(700);
+    d = w.document;
+    report("CRM: public form lists 6 programmes", d.querySelectorAll("#fCourse option").length === 6);
+    d.querySelector("#fName").value = "Web Student";
+    d.querySelector("#fPhone").value = "9899000088";
+    d.querySelector("#submit").click(); await sleep(600);
+    const webLead = ls().find(l => l.name === "Web Student");
+    report("CRM: web enquiry lands assigned in pipeline", !!d.querySelector(".pub-done") && !!webLead && (webLead.tags || []).includes("web") && !!webLead.ownerId);
+
+    // repeat submission must attach to the existing record, not duplicate
+    w = await loadFrame("../CRM/enquiry.html"); await sleep(700);
+    d = w.document;
+    d.querySelector("#fName").value = "Web Student";
+    d.querySelector("#fPhone").value = "9899000088";
+    d.querySelector("#submit").click(); await sleep(600);
+    const acts = JSON.parse(localStorage.getItem("crm_v2:activities") || "[]");
+    report("CRM: repeat web submission dedupes", ls().filter(l => l.name === "Web Student").length === 1 && webLead && acts.some(a => a.leadId === webLead.id && a.note.includes("again")));
+  } catch (e) { report("CRM: exception", false, e.message); }
+  wipe("crm_v2");
+  sessionStorage.removeItem("crm_user");
+}
+
 (async () => {
   await testAcademy();
   await testGear();
   await testKatta();
+  await testCrm();
   const fails = results.filter(r => r.startsWith("FAIL")).length;
   results.push("");
   results.push(fails === 0 ? "ALL TESTS PASSED (" + results.filter(r => r.startsWith("PASS")).length + " checks)" : fails + " FAILURES");

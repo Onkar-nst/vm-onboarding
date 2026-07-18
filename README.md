@@ -1,9 +1,11 @@
 # Katta — Production-Ready Internal Tools Suite
 
-Three sellable web apps, born as replicas of apps #2, #3 and #4 from Varun Mayya's
+Four sellable web apps. Three born as replicas of apps #2, #3 and #4 from Varun Mayya's
 video [*"5 Apps I Built With AI to Run My 500-Person Company"*](https://www.youtube.com/watch?v=M1E4ZzdpOco)
-and rebuilt to production grade: **nothing hard-coded, every entity editable in-app,
-and all persistence behind a swappable database layer.**
+and rebuilt to production grade, plus an **Admissions CRM for schools & colleges**
+designed from market research to be sold on its own. House rule throughout:
+**nothing hard-coded, every entity editable in-app, and all persistence behind a
+swappable database layer.**
 
 ![Hub](docs/screenshots/hub.png)
 
@@ -105,6 +107,30 @@ Q&A over indexed session recordings with cited timestamps.
 - The local retrieval engine is one function (`search()` in `app.js`); swap it
   for embeddings + an LLM without touching the UI.
 
+## Product No. 5 — Admissions CRM  (`CRM/`)
+
+Sellable to schools, colleges and coaching institutes: the whole admission
+funnel from enquiry to enrolment. ![Admissions CRM](docs/screenshots/crm.png)
+
+- **Pipeline board** (drag & drop) over a fully editable stage list, with a
+  table view and bulk reassign / stage-move / follow-up.
+- **Lead 360** — timeline of every call/WhatsApp/email/visit, document
+  checklist (missing → received → verified), fee ledger with auto receipts,
+  template messages with per-lead merge preview.
+- **Lead scoring + SLAs** — five tunable signals rank every queue; a
+  first-response timer and per-stage stall limits make slow follow-up visible.
+- **My Day** — each counsellor's answer to "who do I call right now?"
+- **Admissions desk** — document verification queue and fee collection desk.
+- **Events with ROI** — fast registration-desk capture, cost-per-admission.
+- **Reports** — funnel drop-off, loss reasons, source ROI, counsellor
+  performance, programme demand vs seats.
+- **Public enquiry form** (`CRM/enquiry.html`) — embeddable, writes into the
+  same store, auto-assigns to the least-loaded counsellor, dedupes repeats.
+- **CSV import** with duplicate skipping, JSON backup/restore, CSV exports.
+
+See [`CRM/README.md`](CRM/README.md) for the market research it's built on
+(Slate's $30k floor, the "no dedicated admin" wedge) and the sales pitch.
+
 ---
 
 ## Outreach package  (`outreach/`)
@@ -131,11 +157,12 @@ Q&A over indexed session recordings with cited timestamps.
 
 ## Testing
 
-`.tests/harness.html` drives all three apps end-to-end in headless Chrome —
+`.tests/harness.html` drives all four apps end-to-end in headless Chrome —
 including the course builder, review workflow, booking conflict detection,
-QR pickup/return with conditions, PIN gates, and curator authoring:
-**34/34 checks passed** at build time. Run it at
-`http://localhost:4173/.tests/harness.html`.
+QR pickup/return with conditions, PIN gates, curator authoring, and the full
+CRM flow (seeding, capture, dedupe, board moves, lost/enrol, documents,
+payments, CSV import, public form): **69/69 checks passed** at build time.
+Run it at `http://localhost:4173/.tests/harness.html`.
 
 ## Tech
 

@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Admission Enquiry</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='0.9em' font-size='90'>🎓</text></svg>">
+</head>
+<body>
+  <!-- The public-facing capture form. Embed this page in an iframe on the
+       institution's website, or lift the markup into their CMS: it writes
+       straight into the same Store the CRM reads, so a submission appears on
+       the counsellors' board immediately, auto-assigned and SLA-timed. -->
+  <div class="pub-wrap">
+    <div class="pub-card" id="card">
+      <h1 id="hd">Admission Enquiry</h1>
+      <div class="sub" id="sd">Tell us what you're interested in and an admission counsellor will call you.</div>
+
+      <label>Student name *</label><input id="fName" autocomplete="name">
+      <label>Mobile number *</label><input id="fPhone" inputmode="tel" autocomplete="tel" maxlength="15">
+      <label>Email</label><input id="fEmail" type="email" autocomplete="email">
+      <label>City</label><input id="fCity" autocomplete="address-level2">
+      <label>Programme of interest *</label><select id="fCourse"></select>
+      <label>Class 12 / qualifying percentage</label><input id="fMarks" type="number" min="0" max="100">
+      <label>Question for the admissions team</label><textarea id="fNote" style="min-height:80px" placeholder="Fees, scholarships, hostel, placements…"></textarea>
+
+      <div id="err"></div>
+      <div style="margin-top:22px">
+        <button class="btn brand" id="submit" style="width:100%;padding:13px;font-size:15px">Request a call back</button>
+      </div>
+      <div class="hint" style="text-align:center;margin-top:14px">We'll respond within <b id="slaTxt">60</b> minutes during office hours.</div>
+    </div>
+  </div>
+
+  <div id="toast"></div>
+
+  <script src="config.js"></script>
+  <script src="store.js"></script>
+  <script src="seed.js"></script>
+  <script>
+  const $ = (s, el = document) => el.querySelector(s);
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  function toast(msg) {
+    const t = $("#toast");
+    t.textContent = msg; t.classList.add("show");
+    clearTimeout(toast._t);
+    toast._t = setTimeout(() => t.classList.remove("show"), 2800);
+  }
+
+  let settings = null, courses = [], sources = [], stages = [], users = [], leads = [];
+
+  async function load() {
+    // A visitor may land here before anyone has opened the CRM, so seed first.
+    if (!(await Store.list("leads")).length && !(await Store.getMeta("seeded"))) await loadSeedIfEmpty();
+
+    const [st, cs, sr, sg, us, ld] = await Promise.all([
+      Store.list("settings"), Store.list("courses"), Store.list("sources"),
+      Store.list("stages"), Store.list("users"), Store.list("leads")
+    ]);
+    settings = st.find(x => x.id === "settings") || { orgName: "Our Institution", firstResponseSlaMins: 60, assignMode: "round_robin" };
+    courses = cs.filter(c => c.active !== false);
+    sources = sr;
+    stages = sg.sort((a, b) => a.order - b.order);
+    users = us.filter(u => u.active !== false);
+    leads = ld;
+
+    $("#hd").textContent = settings.orgName;
+    $("#sd").textContent = `Admission enquiry for ${settings.academicYear || "the coming session"}. An admission counsellor will call you back.`;
+    document.title = settings.orgName + " — Admission Enquiry";
+    $("#slaTxt").textContent = settings.firstResponseSlaMins || 60;
+    $("#fCourse").innerHTML = courses.map(c =>
+      `<option value="${c.id}">${esc(c.name)} — ${esc(c.intake || "")}</option>`).join("");
+  }
+
+  // Mirrors pickOwner() in app.js: least-loaded counsellor wins, so a web
+  // submission is owned by a real person the moment it lands.
+  function pickOwner(courseId) {
+    const pool = users.filter(u => u.role === "counsellor" || u.role === "telecaller");
+    if (!pool.length) return (users[0] || {}).id || null;
+    if (settings.assignMode === "manual") return null;
+    if (settings.assignMode === "by_course") {
+      const idx = String(courseId).split("").reduce((a, c) => a + c.charCodeAt(0), 0) % pool.length;
+      return pool[idx].id;
+    }
+    const openIds = new Set(stages.filter(s => s.kind === "open").map(s => s.id));
+    const load = pool.map(u => ({ u, n: leads.filter(l => l.ownerId === u.id && openIds.has(l.stage)).length }));
+    load.sort((a, b) => a.n - b.n);
+    return load[0].u.id;
+  }
+
+  $("#submit").addEventListener("click", async () => {
+    const name = $("#fName").value.trim();
+    const phone = $("#fPhone").value.trim();
+    const email = $("#fEmail").value.trim();
+    $("#err").innerHTML = "";
+
+    if (!name) { $("#fName").focus(); $("#err").innerHTML = '<div class="err-box">Please enter the student\'s name.</div>'; return; }
+    if (phone.replace(/\D/g, "").length < 10) {
+      $("#fPhone").focus();
+      $("#err").innerHTML = '<div class="err-box">Please enter a valid 10-digit mobile number.</div>';
+      return;
+    }
+
+    // Repeat submissions are common (people fill the form twice). Log the
+    // second one as a fresh touch instead of creating a duplicate record.
+    const p10 = phone.replace(/\D/g, "").slice(-10);
+    const dup = leads.find(l => String(l.phone || "").replace(/\D/g, "").slice(-10) === p10);
+
+    const courseId = $("#fCourse").value;
+    const webSource = sources.find(s => /website|enquiry form|web/i.test(s.name)) || sources[0];
+    const note = $("#fNote").value.trim();
+
+    if (dup) {
+      dup.lastActivityAt = Date.now();
+      await Store.put("leads", dup);
+      await Store.put("activities", {
+        id: await Store.nextId("ACT"), leadId: dup.id, userId: null, type: "note",
+        ts: Date.now(), outcome: "", durationSec: 0,
+        note: "Submitted the website enquiry form again" + (note ? ": " + note : "")
+      });
+    } else {
+      const id = await Store.nextId("LD");
+      await Store.put("leads", {
+        id, name, phone, email,
+        city: $("#fCity").value.trim(),
+        guardianName: "", guardianPhone: "",
+        courseId, sourceId: webSource ? webSource.id : null,
+        ownerId: pickOwner(courseId),
+        stage: stages[0].id,
+        createdAt: Date.now(), lastActivityAt: Date.now(),
+        marks12: Number($("#fMarks").value) || 0,
+        prevSchool: "", notes: note,
+        firstResponseMins: null,      // starts the response-time SLA clock
+        enrolledAt: null, lostReason: null, docs: {}, tags: ["web"]
+      });
+      await Store.put("activities", {
+        id: await Store.nextId("ACT"), leadId: id, userId: null, type: "note",
+        ts: Date.now(), outcome: "", durationSec: 0,
+        note: "Enquiry submitted through the website form" + (note ? ": " + note : "")
+      });
+      await Store.put("log", {
+        id: await Store.nextId("LOG"), ts: Date.now(),
+        msg: `Website enquiry: ${name} (${id}) — ${(courses.find(c => c.id === courseId) || {}).name}.`
+      });
+    }
+
+    const course = courses.find(c => c.id === courseId) || {};
+    $("#card").innerHTML = `
+      <div class="pub-done">
+        <div class="big">✅</div>
+        <h2>Thank you, ${esc(name.split(" ")[0])}!</h2>
+        <p>Your enquiry for <b>${esc(course.name || "")}</b> has been received.<br>
+        An admission counsellor from ${esc(settings.orgName)} will call you on
+        <b>${esc(phone)}</b> within ${settings.firstResponseSlaMins || 60} minutes during office hours.</p>
+        <div style="margin-top:22px"><button class="btn" id="again">Submit another enquiry</button></div>
+      </div>`;
+    $("#again").addEventListener("click", () => location.reload());
+    toast("Enquiry submitted");
+  });
+
+  $("#fPhone").addEventListener("keydown", e => { if (e.key === "Enter") $("#submit").click(); });
+
+  load();
+  </script>
+</body>
+</html>
