@@ -28,6 +28,9 @@
   <div id="toast"></div>
   <script src="vendor/qrcode.min.js"></script>
   <script src="vendor/jsqr.min.js"></script>
+  <!-- Exists only when the Node server is running; tells config.js to use the database.
+       A 404 here is expected and harmless on static hosting (Netlify, GitHub Pages). -->
+  <script src="/__katta/server.js" onerror="window.KATTA_SERVER=false"></script>
   <script src="config.js"></script>
   <script src="store.js"></script>
   <script src="seed.js"></script>

@@ -1,0 +1,17 @@
+{
+  "name": "katta",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Katta — internal tools suite: Gear Wall, Admissions CRM, Onboarding Academy, Katta Knowledge and portfolio. Vanilla front-ends over a zero-dependency Node API.",
+  "scripts": {
+    "dev": "node server/index.js",
+    "start": "node server/index.js",
+    "static": "sh run.sh",
+    "health": "node -e \"fetch('http://localhost:4173/api/health').then(r=>r.json()).then(d=>console.log(JSON.stringify(d,null,2))).catch(()=>console.log('server is not running — start it with: npm run dev'))\"",
+    "reset": "node -e \"require('node:fs').rmSync('data',{recursive:true,force:true});console.log('database cleared — apps will re-seed on next load')\""
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED"
+}

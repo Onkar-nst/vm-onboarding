@@ -30,6 +30,9 @@
   </header>
   <main class="wrap" id="view"></main>
   <div id="toast"></div>
+  <!-- Exists only when the Node server is running; tells config.js to use the database.
+       A 404 here is expected and harmless on static hosting (Netlify, GitHub Pages). -->
+  <script src="/__katta/server.js" onerror="window.KATTA_SERVER=false"></script>
   <script src="config.js"></script>
   <script src="store.js"></script>
   <script src="seed.js"></script>

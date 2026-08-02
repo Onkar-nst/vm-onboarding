@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Katta — server / REST integration test</title></head>
+<body>
+<h1>Server test results</h1>
+<pre id="results">RUNNING — this must be served by `npm run dev`, not a static server.</pre>
+<script>
+/* Tests the Node server and the RestAdapter round trip.
+ *
+ * harness.html covers app logic against localStorage; this file covers the other
+ * half: that the 6-endpoint contract in store.js is implemented correctly, and
+ * that Gear Wall and the CRM really do read and write through it.
+ *
+ * Run with the server up:  http://localhost:4173/.tests/api-check.html
+ * WARNING: it clears the gearwall + crm data on the server, then lets the apps
+ * re-seed. Never point it at a customer's installation.
+ */
+const out = [];
+function report(name, ok, extra) {
+  out.push((ok ? "PASS" : "FAIL") + " — " + name + (extra ? " (" + extra + ")" : ""));
+  document.getElementById("results").textContent = out.join("\n");
+}
+const B = location.origin;
+const api = async (p, opts) => {
+  const res = await fetch(B + p, opts);
+  const text = await res.text();
+  return { status: res.status, body: text ? JSON.parse(text) : null };
+};
+const json = (method, body) => ({
+  method, headers: { "Content-Type": "application/json" },
+  body: body === undefined ? undefined : JSON.stringify(body)
+});
+function loadApp(url) {
+  return new Promise(resolve => {
+    const f = document.createElement("iframe");
+    f.style.cssText = "width:1280px;height:900px;border:0";
+    f.src = url;
+    f.onload = () => setTimeout(() => resolve(f.contentWindow), 5000); // boot + seed over HTTP
+    document.body.appendChild(f);
+  });
+}
+
+(async () => {
+  try {
+    /* ---------- the server is actually there ---------- */
+    const health = await api("/api/health");
+    report("server responds on /api/health", health.status === 200 && health.body.ok === true,
+      health.body && health.body.storage);
+    if (health.status !== 200) { report("ABORTED — start the server with: npm run dev", false); return; }
+
+    const marker = await fetch(B + "/__katta/server.js");
+    report("server marker is served", marker.ok);
+
+    /* ---------- the 6-endpoint contract ---------- */
+    await api("/api/testns/admin/clear", json("POST"));
+
+    report("GET empty collection returns []",
+      JSON.stringify((await api("/api/testns/things")).body) === "[]");
+
+    await api("/api/testns/things/T-1", json("PUT", { id: "T-1", name: "first" }));
+    await api("/api/testns/things/T-2", json("PUT", { id: "T-2", name: "second" }));
+    let list = (await api("/api/testns/things")).body;
+    report("PUT then GET returns both docs", list.length === 2, list.length + " docs");
+    report("insertion order preserved", list[0].id === "T-1" && list[1].id === "T-2");
+
+    await api("/api/testns/things/T-1", json("PUT", { id: "T-1", name: "renamed" }));
+    list = (await api("/api/testns/things")).body;
+    report("update overwrites in place, keeps order",
+      list.length === 2 && list[0].id === "T-1" && list[0].name === "renamed");
+
+    await api("/api/testns/things/T-2", json("DELETE"));
+    list = (await api("/api/testns/things")).body;
+    report("DELETE removes one doc", list.length === 1 && list[0].id === "T-1");
+
+    report("missing meta key returns null", (await api("/api/testns/meta/nothing")).body === null);
+    await api("/api/testns/meta/seq.LD", json("PUT", { value: 42 }));
+    report("meta round trip keeps type", (await api("/api/testns/meta/seq.LD")).body === 42);
+
+    report("namespaces are isolated",
+      JSON.stringify((await api("/api/othertestns/things")).body) === "[]");
+
+    await api("/api/testns/admin/clear", json("POST"));
+    report("admin/clear empties the namespace",
+      JSON.stringify((await api("/api/testns/things")).body) === "[]");
+
+    /* ---------- bad input is rejected, not crashed on ---------- */
+    const badJson = await fetch(B + "/api/testns/things/X",
+      { method: "PUT", headers: { "Content-Type": "application/json" }, body: "not json" });
+    report("malformed JSON body → 400", badJson.status === 400, "got " + badJson.status);
+    const mismatch = await api("/api/testns/things/X", json("PUT", { id: "Y" }));
+    report("id mismatch between URL and body → 400", mismatch.status === 400, "got " + mismatch.status);
+    const secret = await fetch(B + "/data/katta.db");
+    report("database file is not downloadable", secret.status === 403, "got " + secret.status);
+    const git = await fetch(B + "/.git/config");
+    report("git directory is not downloadable", git.status === 403, "got " + git.status);
+
+    /* ---------- the real apps, end to end ---------- */
+    await api("/api/gearwall/admin/clear", json("POST"));
+    await api("/api/crm/admin/clear", json("POST"));
+
+    const gw = await loadApp("/gear-wall/");
+    report("Gear Wall picks the rest adapter", gw.APP_CONFIG.adapter === "rest", gw.APP_CONFIG.adapter);
+    const gear = (await api("/api/gearwall/gear")).body;
+    const members = (await api("/api/gearwall/members")).body;
+    report("Gear Wall seeded into the database", gear.length > 0 && members.length > 0,
+      gear.length + " gear, " + members.length + " members");
+
+    const crm = await loadApp("/CRM/");
+    report("CRM picks the rest adapter", crm.APP_CONFIG.adapter === "rest", crm.APP_CONFIG.adapter);
+    const leads = (await api("/api/crm/leads")).body;
+    const acts = (await api("/api/crm/activities")).body;
+    report("CRM seeded a demo season into the database", leads.length > 0 && acts.length > 0,
+      leads.length + " leads, " + acts.length + " activities");
+
+    const localKeys = Object.keys(localStorage)
+      .filter(k => k.startsWith("crm_v2:") || k.startsWith("gearwall_v2:"));
+    report("nothing was written to localStorage", localKeys.length === 0, localKeys.length + " keys");
+
+    /* ---------- the escape hatch still works ---------- */
+    const forced = await loadApp("/CRM/?db=local");
+    report("?db=local forces browser storage", forced.APP_CONFIG.adapter === "local", forced.APP_CONFIG.adapter);
+
+    /* ---------- data survives a reload (it is on the server, not in the tab) ---------- */
+    const again = (await api("/api/crm/leads")).body;
+    report("data persists independently of the browser", again.length === leads.length,
+      again.length + " leads still there");
+  } catch (err) {
+    report("EXCEPTION: " + err.message, false);
+  }
+
+  const fails = out.filter(r => r.startsWith("FAIL")).length;
+  out.push("");
+  out.push(fails === 0
+    ? "ALL SERVER TESTS PASSED (" + out.filter(r => r.startsWith("PASS")).length + " checks)"
+    : fails + " FAILURES");
+  document.getElementById("results").textContent = out.join("\n");
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html><head><style>*{margin:0}iframe{border:0;width:1440px;height:960px}</style></head>
+<body>
+<iframe id="f" src="http://localhost:4173/vm-onboarding/index.html?db=local"></iframe>
+<script>
+// Screenshot pose for the Onboarding Academy: sign in as a seeded trainee so the
+// course home renders with its module grid (locked + unlocked states visible).
+document.getElementById("f").onload = () => setTimeout(() => {
+  const d = document.getElementById("f").contentWindow.document;
+  const person = d.querySelector(".person-btn");
+  if (person) person.click();
+}, 1600);
+</script>
+</body></html>

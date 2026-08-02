@@ -12,12 +12,38 @@ swappable database layer.**
 ## Quick start
 
 ```sh
-./run.sh          # serves everything at http://localhost:4173
+npm run dev       # everything at http://localhost:4173
 ```
 
-or `python3 -m http.server 4173` from this folder. Serving over `localhost` also
-enables the camera for Gear Wall's QR scanner. Default manager/lead/curator PIN
-everywhere: **1234** (change it in each app's Settings).
+No `npm install` — the server has **zero dependencies** (plain `node:http` +
+Node's built-in `node:sqlite`, with a JSON-file fallback on Node < 22.5).
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | apps **+ REST API + database** (Gear Wall and the CRM share real data) |
+| `npm run static` | files only, no server-side database (same as the old `./run.sh`) |
+| `npm run health` | what the server is storing right now |
+| `npm run reset` | wipe the database; apps re-seed on next load |
+
+Serving over `localhost` also enables the camera for Gear Wall's QR scanner.
+Default manager/lead/curator PIN everywhere: **1234** (change it in Settings).
+
+### Which storage am I using?
+
+Each app decides automatically, so the same files work in both worlds:
+
+| How you opened it | Adapter | Data lives in |
+|---|---|---|
+| `npm run dev` | `rest` | the server's database — **shared by everyone** |
+| static host (Netlify, GitHub Pages, `npm run static`) | `local` | that one browser — a private demo copy |
+
+The switch is a marker file (`/__katta/server.js`) that only the Node server
+serves; on a static host it 404s and the app falls back to localStorage. Override
+per tab with `?db=local` or `?db=rest`.
+
+**This matters for selling:** a demo link can stay on `local` (every visitor gets
+their own sandbox, nobody can wreck it for the next one), while a real customer
+runs `npm run dev` and their whole team sees the same board.
 
 ## The architecture: database-ready by design
 
@@ -32,9 +58,33 @@ Each app has the same three-file data layer:
 **All app code calls `Store.list / put / remove / getMeta / setMeta` asynchronously** —
 no code change is needed to move from browser storage to a real database.
 
-### Connecting a real database
+### The included server (`server/`)
 
-Implement six endpoints (any stack — Express+Postgres, Supabase edge functions, Firebase):
+`npm run dev` starts it. Two files, no dependencies:
+
+| File | Role |
+|---|---|
+| `server/index.js` | static file serving + the 6 REST endpoints + the `/__katta/server.js` marker |
+| `server/db.js` | storage: `node:sqlite` (`data/katta.db`), falling back to a JSON file |
+
+Data is namespaced per app (`/api/gearwall/…`, `/api/crm/…`), so both apps share
+one database file without seeing each other's rows. `data/` is gitignored.
+
+```sh
+PORT=5000 npm run dev            # different port
+KATTA_TOKEN=secret npm run dev   # require Authorization: Bearer secret on /api/*
+KATTA_LOG=1 npm run dev          # log every write
+```
+
+Not yet production-hardened: there are no server-side user accounts (the PIN is a
+UX gate, as before), and `KATTA_TOKEN` is a single shared token. For a real
+deployment put it behind HTTPS and add per-user auth — the `Authorization` header
+the RestAdapter already sends is the hook for it.
+
+### Connecting a different database
+
+The apps only care about the contract, so you can replace `server/` entirely.
+Implement six endpoints (any stack — Express+Postgres, Supabase, Firebase):
 
 ```
 GET    {api}/{collection}          → [docs]
@@ -157,12 +207,17 @@ See [`CRM/README.md`](CRM/README.md) for the market research it's built on
 
 ## Testing
 
-`.tests/harness.html` drives all four apps end-to-end in headless Chrome —
-including the course builder, review workflow, booking conflict detection,
-QR pickup/return with conditions, PIN gates, curator authoring, and the full
-CRM flow (seeding, capture, dedupe, board moves, lost/enrol, documents,
-payments, CSV import, public form): **69/69 checks passed** at build time.
-Run it at `http://localhost:4173/.tests/harness.html`.
+Start the server (`npm run dev`), then open both suites in a browser:
+
+| Suite | URL | Covers |
+|---|---|---|
+| App logic | `/.tests/harness.html` | **69/69** — course builder, review workflow, booking conflict detection, QR pickup/return with conditions, PIN gates, curator authoring, and the full CRM flow (seeding, capture, dedupe, board moves, lost/enrol, documents, payments, CSV import, public form) |
+| Server + REST | `/.tests/api-check.html` | **22/22** — all six endpoints, insertion order, namespace isolation, 400s on bad input, blocked access to `data/` and `.git`, both apps booting and seeding through the API, and the `?db=local` override |
+
+The app harness pins itself to `?db=local` so it tests app logic deterministically
+regardless of how it's served; `api-check.html` is the one that exercises the
+database path. **`api-check.html` clears the gearwall + crm data on the server** —
+never run it against a customer's installation.
 
 ## Tech
 

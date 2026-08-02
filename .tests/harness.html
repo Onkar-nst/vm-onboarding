@@ -11,11 +11,22 @@ function report(name, ok, extra) {
   results.push((ok ? "PASS" : "FAIL") + " — " + name + (extra ? " (" + extra + ")" : ""));
 }
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+/* Always run the apps in localStorage mode.
+ *
+ * This harness tests application logic, and it resets state between phases with
+ * wipe() (which clears localStorage) plus short fixed sleeps. Both assume the
+ * synchronous-ish local adapter. Served by `npm run dev` the apps would default
+ * to the REST adapter, where wipe() resets nothing and seeding takes seconds of
+ * HTTP round trips — so the suite would fail for reasons that have nothing to do
+ * with the code under test.
+ *
+ * The server/REST contract has its own test: .tests/api-check.html
+ */
 function loadFrame(url) {
   return new Promise(resolve => {
     const f = document.getElementById("frame");
     f.onload = () => resolve(f.contentWindow);
-    f.src = url;
+    f.src = url + (url.includes("?") ? "&" : "?") + "db=local";
   });
 }
 function wipe(prefix) {

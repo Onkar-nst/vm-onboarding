@@ -58,14 +58,35 @@
   a.card.c4 { background: linear-gradient(160deg, #f5f7ff 0%, #e6e9fb 100%); color: #1d2340; }
   .c4 h2 { color: #4338ca; }
   .c4 .tag { border-color: rgba(29,35,64,0.3); }
+  .c5 { background: linear-gradient(160deg, #101512 0%, #16211a 100%); }
+  .c5 h2 { color: #7ee787; }
+  .extras {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 28px;
+    width: 100%;
+    max-width: 1020px;
+  }
+  .extras a {
+    font-size: 13px;
+    color: #a7acb8;
+    text-decoration: none;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.10);
+    transition: color 0.18s ease, border-color 0.18s ease;
+  }
+  .extras a:hover { color: #e8e6e1; border-color: rgba(255,255,255,0.28); }
   footer { margin-top: 56px; color: #6b7080; font-size: 13px; text-align: center; line-height: 1.7; }
   footer code { background: rgba(255,255,255,0.08); padding: 2px 8px; border-radius: 6px; font-size: 12px; }
 </style>
 </head>
 <body>
   <div class="kicker">Katta &middot; Internal Tools Suite</div>
-  <h1>Four <span>vibe-coded</span> tools</h1>
-  <p class="sub">An onboarding academy, a gear-tracking system, a knowledge Q&amp;A interface &mdash; and an admissions CRM built to be sold to schools and colleges.</p>
+  <h1>Five <span>vibe-coded</span> projects</h1>
+  <p class="sub">An onboarding academy, a gear-tracking system, a knowledge Q&amp;A interface, an admissions CRM built to be sold to schools and colleges &mdash; and a personal portfolio site.</p>
 
   <div class="grid">
     <a class="card c1" href="vm-onboarding/index.html">
@@ -92,11 +113,27 @@
       <p>Enquiry to enrolment for schools &amp; colleges: pipeline board, lead scoring, response-time SLAs, document verification, fee tracking and source-ROI reports.</p>
       <span class="tag">Ed-tech &middot; Pipeline &middot; SLA &middot; ROI</span>
     </a>
+    <a class="card c5" href="portfolio/index.html">
+      <div class="num">Personal</div>
+      <h2>Portfolio</h2>
+      <p>Single-page developer portfolio: preloader, fanning card stack, scroll-linked text reveal, sticky stacking project cards and a draggable archive.</p>
+      <span class="tag">Motion &middot; Scroll &middot; Interaction</span>
+    </a>
+  </div>
+
+  <div class="extras">
+    <a href="CRM/enquiry.html">CRM &rarr; public enquiry form</a>
+    <a href="portfolio/index.html?nopreload">Portfolio &rarr; skip intro</a>
+    <a href="gear-wall/index.html">Gear Wall &rarr; QR scanner needs localhost</a>
+    <a href=".tests/harness.html">App tests (69 checks)</a>
+    <a href=".tests/api-check.html">Server tests (22 checks)</a>
+    <a href="api/health">Server health</a>
   </div>
 
   <footer>
-    Serve locally with <code>./run.sh</code> (or <code>python3 -m http.server 4173</code>) and open <code>http://localhost:4173</code>.<br>
-    All data lives in your browser&rsquo;s localStorage &mdash; no backend needed.
+    Start with <code>npm run dev</code> &mdash; no <code>npm install</code> needed.<br>
+    Manager / lead / curator PIN everywhere: <code>1234</code> &mdash; change it in each app&rsquo;s Settings.<br>
+    Gear Wall and the CRM save to the server database; add <code>?db=local</code> to any URL for a private browser-only copy.
   </footer>
 </body>
 </html>
