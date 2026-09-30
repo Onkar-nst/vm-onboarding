@@ -4,3 +4,6 @@ node_modules/
 
 # Node server data (SQLite / JSON)
 data/
+
+# Sutra is its own repository (github.com/Onkar-nst/sutra)
+sutra/
